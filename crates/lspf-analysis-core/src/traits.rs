@@ -1,0 +1,68 @@
+use std::path::Path;
+
+use crate::abc::Abc;
+use crate::checker::Checker;
+use crate::cognitive::Cognitive;
+use crate::cyclomatic::Cyclomatic;
+use crate::exit::Exit;
+use crate::getter::Getter;
+use crate::halstead::Halstead;
+use crate::langs::*;
+use crate::loc::Loc;
+use crate::mi::Mi;
+use crate::nargs::NArgs;
+use crate::node::Node;
+use crate::nom::Nom;
+use crate::npa::Npa;
+use crate::npm::Npm;
+use crate::wmc::Wmc;
+use crate::working_memory::WorkingMemory;
+
+/// A trait for callback functions.
+///
+/// Allows to call a private library function, getting as result
+/// its output value.
+pub trait Callback {
+    /// The output type returned by the callee
+    type Res;
+    /// The input type used by the caller to pass the arguments to the callee
+    type Cfg;
+
+    /// Calls a function inside the library and returns its value
+    fn call<T: ParserTrait>(cfg: Self::Cfg, parser: &T) -> Self::Res;
+}
+
+pub trait LanguageInfo {
+    type BaseLang;
+
+    fn get_lang() -> LANG;
+    fn get_lang_name() -> &'static str;
+}
+
+#[doc(hidden)]
+pub trait ParserTrait {
+    type Checker: Checker;
+    type Getter: Getter;
+    type Cognitive: Cognitive;
+    type Cyclomatic: Cyclomatic;
+    type Halstead: Halstead;
+    type Loc: Loc;
+    type Nom: Nom;
+    type Mi: Mi;
+    type NArgs: NArgs;
+    type Exit: Exit;
+    type Wmc: Wmc;
+    type Abc: Abc;
+    type Npm: Npm;
+    type Npa: Npa;
+    type WorkingMemory: WorkingMemory;
+
+    fn new(code: Vec<u8>, path: &Path) -> Self;
+    fn get_language(&self) -> LANG;
+    fn get_root(&self) -> Node<'_>;
+    fn get_code(&self) -> &[u8];
+}
+
+pub(crate) trait Search<'a> {
+    fn act_on_child(&self, action: &mut dyn FnMut(&Node<'a>));
+}

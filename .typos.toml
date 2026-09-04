@@ -1,0 +1,10 @@
+# See https://github.com/crate-ci/typos/blob/master/docs/reference.md to configure typos
+
+[default.extend-identifiers]
+
+[default.extend-words]
+
+[files]
+extend-exclude = [
+    "crates/lspf-analysis-core/src/languages/",
+]
