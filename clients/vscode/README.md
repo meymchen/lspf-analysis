@@ -8,6 +8,11 @@ generic LSP client.
 
 Supported languages: **JavaScript**, **Python**, **Rust**, **TypeScript**, **TSX**.
 
+Everything it displays follows VS Code's own display language: Simplified
+Chinese when the editor is in Simplified Chinese, English otherwise. That
+includes the hovers and the Problems entries, which the language server
+renders — the extension tells it which language you read.
+
 ## What it reports
 
 Hovering a function's name shows its measurements; a function below the
@@ -15,9 +20,17 @@ quality threshold gets a diagnostic on its signature line. The hover appears
 on the name and nowhere else, so it adds to what the editor already tells you
 about a symbol instead of displacing it.
 
-The status bar carries the file as a whole — its quality, how many functions
-it has, how many are below the threshold, and the worst one — for the file
-you are looking at. Turn it off with `lspfAnalysis.statusBar.enabled`.
+The status bar carries the file as a whole. Its hover shows the quality bar,
+how the file's functions are spread across the four bands, and the ones worth
+opening first — each a link that jumps to the line, alongside shortcuts to the
+Problems view and the thresholds. Turn the item off with
+`lspfAnalysis.statusBar.enabled`.
+
+**Function Health**, in the Explorer, lists every function of the file at
+once, worst first, rather than one at a time under the pointer. Clicking a
+row jumps to it; expanding one shows the four pillars, and expanding a pillar
+shows each metric against the threshold it is judged by. The title bar toggles
+between worst-first and source order.
 
 Quality blends four pillars, each taking the worst of its metrics:
 
@@ -59,6 +72,12 @@ a restart.
 ## Commands
 
 - **LSPF Analysis: Restart Server**
+- **LSPF Analysis: Sort by Quality** — order Function Health worst first
+- **LSPF Analysis: Sort by Position** — order it by where the functions are
+
+`LSPF Analysis: Go to Function` also exists, but takes arguments and is only
+ever invoked from a link in the status bar hover or a row of the tree, so it
+is hidden from the command palette.
 
 ## Building it yourself
 

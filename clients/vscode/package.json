@@ -1,7 +1,7 @@
 {
   "name": "lspf-analysis",
-  "displayName": "LSPF Analysis",
-  "description": "Tells you, while you type, which functions are getting hard to work with.",
+  "displayName": "%displayName%",
+  "description": "%description%",
   "version": "0.1.0",
   "publisher": "meymchen",
   "private": true,
@@ -31,6 +31,7 @@
     "workspace"
   ],
   "main": "./dist/extension.js",
+  "l10n": "./l10n",
   "activationEvents": [
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
@@ -43,112 +44,165 @@
     "commands": [
       {
         "command": "lspfAnalysis.restartServer",
-        "title": "Restart Server",
-        "category": "LSPF Analysis"
+        "title": "%command.restartServer.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "lspfAnalysis.goToFunction",
+        "title": "%command.goToFunction.title%",
+        "category": "%command.category%"
+      },
+      {
+        "command": "lspfAnalysis.sortByQuality",
+        "title": "%command.sortByQuality.title%",
+        "category": "%command.category%",
+        "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "lspfAnalysis.sortByPosition",
+        "title": "%command.sortByPosition.title%",
+        "category": "%command.category%",
+        "icon": "$(list-ordered)"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "lspfAnalysis.functions",
+          "name": "%view.functions.name%",
+          "icon": "$(pulse)",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "lspfAnalysis.functions",
+        "contents": "%viewsWelcome.functions%"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "lspfAnalysis.goToFunction",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "lspfAnalysis.sortByQuality",
+          "when": "view == lspfAnalysis.functions && lspfAnalysis.sort == position",
+          "group": "navigation"
+        },
+        {
+          "command": "lspfAnalysis.sortByPosition",
+          "when": "view == lspfAnalysis.functions && lspfAnalysis.sort == quality",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
-      "title": "LSPF Analysis",
+      "title": "%configuration.title%",
       "properties": {
         "lspfAnalysis.health.complexityThreshold": {
           "type": "number",
           "default": 15,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Cognitive complexity scoring 50%. Scores the control-flow pillar alongside cyclomatic complexity; the pillar takes whichever of the two scores worse."
+          "markdownDescription": "%config.health.complexityThreshold%"
         },
         "lspfAnalysis.health.cyclomaticThreshold": {
           "type": "number",
           "default": 10,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Cyclomatic complexity scoring 50%. Scores the control-flow pillar alongside cognitive complexity; the pillar takes whichever of the two scores worse. McCabe's recommended upper bound is 10."
+          "markdownDescription": "%config.health.cyclomaticThreshold%"
         },
         "lspfAnalysis.health.lengthThreshold": {
           "type": "number",
           "default": 30,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Statements (logical lines) scoring 50%. The only measure of the size pillar."
+          "markdownDescription": "%config.health.lengthThreshold%"
         },
         "lspfAnalysis.health.workingMemoryThreshold": {
           "type": "number",
           "default": 8,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Names held at once scoring 50%. Scores the vocabulary-load pillar alongside Halstead difficulty; the pillar takes whichever of the two scores worse."
+          "markdownDescription": "%config.health.workingMemoryThreshold%"
         },
         "lspfAnalysis.health.halsteadDifficultyThreshold": {
           "type": "number",
           "default": 12,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Halstead difficulty scoring 50%. Scores the vocabulary-load pillar alongside working memory; the pillar takes whichever of the two scores worse."
+          "markdownDescription": "%config.health.halsteadDifficultyThreshold%"
         },
         "lspfAnalysis.health.weights.complexity": {
           "type": "number",
           "default": 1,
           "minimum": 0,
-          "markdownDescription": "Weight of the control-flow pillar in the quality blend. Weights are normalized by their sum, so only their ratio matters."
+          "markdownDescription": "%config.health.weights.complexity%"
         },
         "lspfAnalysis.health.weights.length": {
           "type": "number",
           "default": 1,
           "minimum": 0,
-          "markdownDescription": "Weight of the size pillar in the quality blend."
+          "markdownDescription": "%config.health.weights.length%"
         },
         "lspfAnalysis.health.weights.workingMemory": {
           "type": "number",
           "default": 1,
           "minimum": 0,
-          "markdownDescription": "Weight of the vocabulary-load pillar in the quality blend."
+          "markdownDescription": "%config.health.weights.workingMemory%"
         },
         "lspfAnalysis.health.weights.interface": {
           "type": "number",
           "default": 0.5,
           "minimum": 0,
-          "markdownDescription": "Weight of the interface pillar in the quality blend. Half the others by default: a wide signature is a real signal, but a narrower one than the three pillars describing what a function does."
+          "markdownDescription": "%config.health.weights.interface%"
         },
         "lspfAnalysis.health.parametersThreshold": {
           "type": "number",
           "default": 4,
           "exclusiveMinimum": 0,
-          "markdownDescription": "Parameter count scoring 50%. The only measure of the interface pillar."
+          "markdownDescription": "%config.health.parametersThreshold%"
         },
         "lspfAnalysis.health.qualityWarn": {
           "type": "number",
           "default": 25,
           "minimum": 0,
           "maximum": 100,
-          "markdownDescription": "Quality below this is reported as a warning."
+          "markdownDescription": "%config.health.qualityWarn%"
         },
         "lspfAnalysis.health.qualityError": {
           "type": "number",
           "default": 10,
           "minimum": 0,
           "maximum": 100,
-          "markdownDescription": "Quality below this is reported as an error rather than a warning."
+          "markdownDescription": "%config.health.qualityError%"
         },
         "lspfAnalysis.diagnostics.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Publish diagnostics at all. Turning this off clears what is displayed."
+          "markdownDescription": "%config.diagnostics.enabled%"
         },
         "lspfAnalysis.diagnostics.perMetric": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Also report a function whose quality passes but which has one badly scoring pillar, as a hint."
+          "markdownDescription": "%config.diagnostics.perMetric%"
         },
         "lspfAnalysis.diagnostics.file": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Also report the file as a whole when its quality is bad enough to be an error."
+          "markdownDescription": "%config.diagnostics.file%"
         },
         "lspfAnalysis.statusBar.enabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Show the active file's overall quality in the status bar."
+          "markdownDescription": "%config.statusBar.enabled%"
         },
         "lspfAnalysis.server.path": {
           "type": "string",
           "default": "",
           "scope": "machine-overridable",
-          "markdownDescription": "Path to an `lspf-analysis` binary to use instead of the one packaged with this extension. A leading `~` is expanded."
+          "markdownDescription": "%config.server.path%"
         },
         "lspfAnalysis.trace.server": {
           "type": "string",
@@ -158,7 +212,7 @@
             "verbose"
           ],
           "default": "off",
-          "description": "Trace the messages exchanged with the language server."
+          "description": "%config.trace.server%"
         }
       }
     }

@@ -13,7 +13,9 @@ pub mod config;
 pub mod diagnostics;
 pub mod document;
 pub mod formats;
+pub mod functions;
 pub mod hover;
+pub mod i18n;
 pub mod status;
 
 use std::collections::HashMap;
@@ -33,6 +35,7 @@ use lspf_analysis_core::health::FileHealth;
 
 use config::Settings;
 use document::{analyze, language_for, uri_to_path};
+use functions::{FunctionHealthParams, FunctionHealthRequest, FunctionHealthResult};
 use status::FileHealthNotification;
 
 /// What the server carries across one connection.
@@ -204,12 +207,31 @@ async fn hover(
     Ok(Some(Hover {
         contents: Contents::MarkupContent(MarkupContent {
             kind: MarkupKind::Markdown,
-            value: hover::render(function),
+            value: hover::render(function, settings.locale()),
         }),
         // The name, and nothing else: the editor highlights this while the
         // hover is up, and other providers contribute their own.
         range: Some(range),
     }))
+}
+
+/// Answers `lspfAnalysis/functionHealth` for one document.
+///
+/// The document is re-analyzed rather than read from a cache, for the same
+/// reason hover re-analyzes: the server keeps no scored copy, and the text
+/// may have moved on since the last publish. A client asks for this when it
+/// has a view open, not on every keystroke.
+async fn function_health(
+    state: Arc<State>,
+    ctx: ServerContext,
+    params: FunctionHealthParams,
+    _ct: CancellationToken,
+) -> Result<Option<FunctionHealthResult>, LspError> {
+    let settings = state.settings(&ctx);
+    let Some(analyzed) = report_for(&ctx, &params.uri, &settings).await else {
+        return Ok(None);
+    };
+    Ok(Some(functions::detail(&params.uri, &analyzed.report)))
 }
 
 /// Builds the language server.
@@ -226,6 +248,7 @@ pub fn server(file_provider: impl FileProvider, initial: Settings) -> Server<Sta
     Server::builder(state)
         .file_provider(file_provider)
         .feature(lspf::features::hover(), hover)
+        .request::<FunctionHealthRequest, _, _>(function_health)
         .notification::<DidOpenTextDocument, _, _>(did_open)
         .notification::<DidChangeTextDocument, _, _>(did_change)
         .notification::<DidSaveTextDocument, _, _>(did_save)

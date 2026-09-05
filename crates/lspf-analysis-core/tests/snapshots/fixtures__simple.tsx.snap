@@ -285,9 +285,11 @@ health:
           measures:
             - name: cognitive complexity
               value: 1
+              threshold: 15
               score: 99.558
             - name: cyclomatic complexity
               value: 2
+              threshold: 10
               score: 96.154
         size:
           name: size
@@ -295,6 +297,7 @@ health:
           measures:
             - name: statements
               value: 2
+              threshold: 30
               score: 99.558
         vocabulary:
           name: vocabulary load
@@ -302,9 +305,11 @@ health:
           measures:
             - name: working memory
               value: 1
+              threshold: 8
               score: 98.462
             - name: Halstead difficulty
               value: 4.8
+              threshold: 12
               score: 86.207
         interface:
           name: interface
@@ -312,6 +317,7 @@ health:
           measures:
             - name: parameters
               value: 1
+              threshold: 4
               score: 94.118
     - name: Badge
       start_line: 5
@@ -325,9 +331,11 @@ health:
           measures:
             - name: cognitive complexity
               value: 1
+              threshold: 15
               score: 99.558
             - name: cyclomatic complexity
               value: 2
+              threshold: 10
               score: 96.154
         size:
           name: size
@@ -335,6 +343,7 @@ health:
           measures:
             - name: statements
               value: 5
+              threshold: 30
               score: 97.297
         vocabulary:
           name: vocabulary load
@@ -342,9 +351,11 @@ health:
           measures:
             - name: working memory
               value: 5
+              threshold: 8
               score: 71.91
             - name: Halstead difficulty
               value: 10.556
+              threshold: 12
               score: 56.378
         interface:
           name: interface
@@ -352,4 +363,5 @@ health:
           measures:
             - name: parameters
               value: 1
+              threshold: 4
               score: 94.118

@@ -1,6 +1,8 @@
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+import { t } from './i18n.js';
+
 /** Where the binary came from, which decides what to say when it is missing. */
 export type ServerSource = 'configured' | 'development' | 'bundled';
 
@@ -74,17 +76,17 @@ export function expandHome(candidate: string, homeDirectory: string): string {
  * the file directly; saying so is more useful than reporting a bare path.
  */
 export function describeMissingServer({ binary, source }: ResolvedServer): string {
-    const found = `LSPF Analysis could not find its language server at ${binary}.`;
+    const found = t('LSPF Analysis could not find its language server at {0}.', binary);
     switch (source) {
         case 'configured':
-            return `${found} Check the lspfAnalysis.server.path setting.`;
+            return `${found} ${t('Check the lspfAnalysis.server.path setting.')}`;
         case 'development':
-            return `${found} Run cargo build in the repository first.`;
+            return `${found} ${t('Run cargo build in the repository first.')}`;
         case 'bundled':
-            return (
-                `${found} This usually means the installed extension was built for a ` +
-                'different platform. Install the build matching this machine, or point ' +
-                'lspfAnalysis.server.path at an lspf-analysis binary.'
-            );
+            return `${found} ${t(
+                'This usually means the installed extension was built for a different ' +
+                    'platform. Install the build matching this machine, or point ' +
+                    'lspfAnalysis.server.path at an lspf-analysis binary.',
+            )}`;
     }
 }

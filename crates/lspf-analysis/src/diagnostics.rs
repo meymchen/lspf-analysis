@@ -6,6 +6,7 @@ use lspf_analysis_core::health::{FileHealth, FunctionHealth, HealthConfig};
 
 use crate::config::Settings;
 use crate::document::line_range;
+use crate::i18n::Locale;
 
 /// The `source` every diagnostic this server publishes carries.
 pub const SOURCE: &str = "lspf-analysis";
@@ -29,30 +30,41 @@ pub fn build(
         return Vec::new();
     }
     let config = &settings.health;
+    let locale = settings.locale();
     let mut diagnostics = Vec::new();
 
     for function in &report.functions {
         if function.quality < config.quality_warn {
-            diagnostics.push(quality_diagnostic(function, text, encoding, config));
+            diagnostics.push(quality_diagnostic(function, text, encoding, config, locale));
         } else if settings.diagnostics.per_metric {
-            diagnostics.extend(pillar_diagnostics(function, text, encoding));
+            diagnostics.extend(pillar_diagnostics(function, text, encoding, locale));
         }
     }
 
     if settings.diagnostics.file && report.quality < config.quality_error {
+        let count = report.functions.len();
         diagnostics.push(Diagnostic {
             range: line_range(text, 1, encoding),
             severity: Some(DiagnosticSeverity::Warning),
             code: Some(Code::String("file-quality".into())),
             source: Some(SOURCE.into()),
-            message: format!(
-                "file quality {quality:.0}% ({grade}) across {count} function{plural}",
-                quality = report.quality,
-                grade = report.grade,
-                count = report.functions.len(),
-                plural = if report.functions.len() == 1 { "" } else { "s" },
-            )
-            .into(),
+            // Singular and plural are separate source strings rather than a
+            // suffix, because a language without plurals cannot be given one
+            // by appending to a translation.
+            message: locale
+                .fill(
+                    if count == 1 {
+                        "file quality {0}% ({1}) across {2} function"
+                    } else {
+                        "file quality {0}% ({1}) across {2} functions"
+                    },
+                    &[
+                        &format!("{:.0}", report.quality),
+                        locale.t(report.grade.as_str()),
+                        &count.to_string(),
+                    ],
+                )
+                .into(),
             ..Diagnostic::default()
         });
     }
@@ -66,6 +78,7 @@ fn quality_diagnostic(
     text: &str,
     encoding: PositionEncoding,
     config: &HealthConfig,
+    locale: Locale,
 ) -> Diagnostic {
     let severity = if function.quality < config.quality_error {
         DiagnosticSeverity::Error
@@ -76,36 +89,51 @@ fn quality_diagnostic(
     // Naming the measurement that set the pillar's score turns "this is
     // complex" into something the reader can act on.
     let cause = pillar.worst_measure().map_or_else(
-        || pillar.name.to_string(),
-        |metric| format!("{} ({} {:.0})", pillar.name, metric.name, metric.value),
+        || locale.t(pillar.name).to_string(),
+        |metric| {
+            locale.fill(
+                "{0} ({1} {2})",
+                &[
+                    locale.t(pillar.name),
+                    locale.t(metric.name),
+                    &format!("{:.0}", metric.value),
+                ],
+            )
+        },
     );
     Diagnostic {
         range: line_range(text, function.start_line, encoding),
         severity: Some(severity),
         code: Some(Code::String("quality".into())),
         source: Some(SOURCE.into()),
-        message: format!(
-            "function `{name}`: quality {quality:.0}% ({grade}), worst pillar {cause} — {summary}",
-            name = function.display_name(),
-            quality = function.quality,
-            grade = function.grade,
-            summary = summarize(function),
-        )
-        .into(),
+        message: locale
+            .fill(
+                "function `{0}`: quality {1}% ({2}), worst pillar {3} — {4}",
+                &[
+                    function.display_name(),
+                    &format!("{:.0}", function.quality),
+                    locale.t(function.grade.as_str()),
+                    &cause,
+                    &summarize(function, locale),
+                ],
+            )
+            .into(),
         ..Diagnostic::default()
     }
 }
 
 /// Lists every measurement behind a function's score, worst pillar first.
-fn summarize(function: &FunctionHealth) -> String {
+fn summarize(function: &FunctionHealth, locale: Locale) -> String {
     function
         .scores
         .pillars()
         .iter()
         .flat_map(|pillar| pillar.measures.iter())
-        .map(|metric| format!("{} {:.0}", metric.name, metric.value))
+        .map(|metric| format!("{} {:.0}", locale.t(metric.name), metric.value))
         .collect::<Vec<_>>()
-        .join(", ")
+        // The separator is translated too: a list joined with a half-width
+        // comma reads wrong in the middle of a Chinese sentence.
+        .join(locale.t(", "))
 }
 
 /// Advisory diagnostics for a function that passes overall but has one
@@ -114,6 +142,7 @@ fn pillar_diagnostics(
     function: &FunctionHealth,
     text: &str,
     encoding: PositionEncoding,
+    locale: Locale,
 ) -> Vec<Diagnostic> {
     function
         .scores
@@ -126,13 +155,16 @@ fn pillar_diagnostics(
             severity: Some(DiagnosticSeverity::Information),
             code: Some(Code::String(metric_code(metric.name).into())),
             source: Some(SOURCE.into()),
-            message: format!(
-                "function `{name}`: {value:.0} {metric}",
-                name = function.display_name(),
-                value = metric.value,
-                metric = metric.name,
-            )
-            .into(),
+            message: locale
+                .fill(
+                    "function `{0}`: {1} {2}",
+                    &[
+                        function.display_name(),
+                        &format!("{:.0}", metric.value),
+                        locale.t(metric.name),
+                    ],
+                )
+                .into(),
             ..Diagnostic::default()
         })
         .collect()
@@ -257,6 +289,43 @@ mod tests {
         assert!(
             loud.iter()
                 .all(|d| d.severity == Some(DiagnosticSeverity::Information))
+        );
+    }
+
+    #[test]
+    fn a_chinese_reader_gets_chinese_messages() {
+        let settings = Settings {
+            locale: Some("zh-cn".into()),
+            ..Settings::default()
+        };
+        let diagnostics = diagnostics_for(&tangled(), &settings);
+        let text = message(&diagnostics[0]);
+        assert!(text.starts_with("函数 `tangled`："), "{text}");
+        assert!(text.contains("最弱支柱 控制流"), "{text}");
+        assert!(text.contains("认知复杂度"), "{text}");
+        assert!(text.contains("较差"), "{text}");
+        assert!(!text.contains("quality"), "{text}");
+    }
+
+    #[test]
+    fn the_code_a_diagnostic_carries_is_the_same_in_every_language() {
+        // Editors and suppression comments key off it.
+        let mut settings = Settings::default();
+        settings.diagnostics.per_metric = true;
+        settings.health.quality_warn = 0.0;
+        let english = diagnostics_for(&tangled(), &settings);
+        settings.locale = Some("zh-cn".into());
+        let chinese = diagnostics_for(&tangled(), &settings);
+
+        let codes = |diagnostics: &[Diagnostic]| -> Vec<Option<Code>> {
+            diagnostics.iter().map(|d| d.code.clone()).collect()
+        };
+        assert!(!english.is_empty());
+        assert_eq!(codes(&english), codes(&chinese));
+        assert_ne!(
+            message(&english[0]),
+            message(&chinese[0]),
+            "only the message follows the language"
         );
     }
 

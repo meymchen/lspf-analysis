@@ -1,0 +1,45 @@
+{
+  "control flow": "控制流",
+  "size": "规模",
+  "vocabulary load": "词汇负担",
+  "interface": "接口",
+
+  "cognitive complexity": "认知复杂度",
+  "cyclomatic complexity": "圈复杂度",
+  "statements": "语句数",
+  "working memory": "工作记忆",
+  "Halstead difficulty": "Halstead 难度",
+  "parameters": "参数个数",
+
+  "excellent": "优秀",
+  "good": "良好",
+  "fair": "一般",
+  "poor": "较差",
+
+  "quality": "质量",
+  "band": "等级",
+  "functions": "函数数",
+  "<anonymous>": "<匿名函数>",
+
+  "No functions to analyze in this file.": "此文件中没有可分析的函数。",
+  "{0} function, {1} below the warning threshold.": "共 {0} 个函数，其中 {1} 个低于警告阈值。",
+  "{0} functions, {1} below the warning threshold.": "共 {0} 个函数，其中 {1} 个低于警告阈值。",
+  "Worth opening first": "建议优先查看",
+  "Go to line {0}": "跳转到第 {0} 行",
+  "**{0}%**, weakest {1}": "**{0}%**，最弱 {1}",
+  "**{0}%**, weakest {1} ({2})": "**{0}%**，最弱 {1}（{2}）",
+
+  "Lines {0}–{1}.": "第 {0}–{1} 行。",
+  "Weakest: **{0}** — {1}.": "最弱：**{0}** —— {1}。",
+  "Measured {0} against a threshold of {1}, the value that would score 50%.": "实测 {0}，阈值 {1}，即得 50 分的取值。",
+
+  "Problems": "问题",
+  "Settings": "设置",
+  "Thresholds": "阈值设置",
+  "Restart server": "重启服务器",
+
+  "LSPF Analysis could not find its language server at {0}.": "LSPF Analysis 在 {0} 找不到它的语言服务器。",
+  "Check the lspfAnalysis.server.path setting.": "请检查 lspfAnalysis.server.path 设置。",
+  "Run cargo build in the repository first.": "请先在仓库里执行 cargo build。",
+  "This usually means the installed extension was built for a different platform. Install the build matching this machine, or point lspfAnalysis.server.path at an lspf-analysis binary.": "这通常说明安装的扩展是为另一个平台构建的。请安装与本机匹配的版本，或把 lspfAnalysis.server.path 指向一个 lspf-analysis 可执行文件。"
+}

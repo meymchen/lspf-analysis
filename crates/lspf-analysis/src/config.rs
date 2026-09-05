@@ -5,6 +5,8 @@ use serde_json::Value;
 
 use lspf_analysis_core::health::HealthConfig;
 
+use crate::i18n::Locale;
+
 /// The settings section this server reads, in `initializationOptions` and in
 /// `workspace/didChangeConfiguration`.
 pub const SECTION: &str = "lspfAnalysis";
@@ -20,6 +22,12 @@ pub struct Settings {
     pub health: HealthConfig,
     /// Which diagnostics get published.
     pub diagnostics: DiagnosticsSettings,
+    /// The language to render hovers and diagnostic messages in, as an
+    /// editor's language tag — `zh-cn`, `en`. Unset, or anything this server
+    /// has no translation for, renders English. Only display text follows it;
+    /// what travels in `lspfAnalysis/fileHealth` and
+    /// `lspfAnalysis/functionHealth` stays English either way.
+    pub locale: Option<String>,
 }
 
 /// Which of the available diagnostics the server publishes.
@@ -48,6 +56,11 @@ impl Default for DiagnosticsSettings {
 }
 
 impl Settings {
+    /// The locale display text is rendered in.
+    pub fn locale(&self) -> Locale {
+        Locale::of(self.locale.as_deref())
+    }
+
     /// Reads settings out of a client-supplied value.
     ///
     /// The value is what the client sent for `initializationOptions` or
@@ -111,6 +124,14 @@ mod tests {
     fn an_unreadable_section_is_ignored_rather_than_reset() {
         let value = json!({ "lspfAnalysis": { "health": { "qualityWarn": "not a number" } } });
         assert_eq!(Settings::from_value(&value), None);
+    }
+
+    #[test]
+    fn the_locale_is_read_from_the_client_and_defaults_to_english() {
+        assert_eq!(Settings::default().locale(), Locale::English);
+        let value = json!({ "lspfAnalysis": { "locale": "zh-cn" } });
+        let settings = Settings::from_value(&value).unwrap();
+        assert_eq!(settings.locale(), Locale::SimplifiedChinese);
     }
 
     #[test]

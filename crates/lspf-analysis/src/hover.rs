@@ -5,6 +5,7 @@ use lspf::types::{Position, Range};
 use lspf_analysis_core::health::{FileHealth, FunctionHealth, Grade};
 
 use crate::document::name_range;
+use crate::i18n::Locale;
 
 /// Finds the function whose declared name is under `position`.
 ///
@@ -42,33 +43,86 @@ pub fn function_at<'a>(
     found
 }
 
-/// Renders a function's numbers as Markdown.
+/// How many cells a score bar is drawn with.
+const BAR_CELLS: usize = 10;
+
+/// Draws a 0-100 score as a bar.
+///
+/// Block characters rather than an image or a codicon: a hover is Markdown,
+/// and every editor that can show Markdown can show these. A reader scans
+/// the column of bars far faster than a column of numbers.
+///
+/// These are never wrapped in a code span. VS Code draws inline code with a
+/// background and horizontal padding, which puts a gap on either side of
+/// every bar and breaks up the column. The two glyphs come from the same
+/// Unicode block, which is designed to tile, so they line up without one.
+fn bar(score: f64) -> String {
+    let filled = ((score / 100.0) * BAR_CELLS as f64)
+        .round()
+        .clamp(0.0, BAR_CELLS as f64) as usize;
+    format!("{}{}", "█".repeat(filled), "░".repeat(BAR_CELLS - filled))
+}
+
+/// Renders a function's numbers as Markdown, in the reader's language.
 ///
 /// One row per metric, grouped under the pillar it scores, so a reader sees
 /// both the verdict and the measurement that produced it. The pillar's own
 /// score is the worst of its rows, which is why it is not repeated.
-pub fn render(function: &FunctionHealth) -> String {
+///
+/// The Markdown is deliberately portable — no HTML, no editor-specific icon
+/// syntax — because every LSP client renders this. A client that can do
+/// more is free to add to it; the VS Code extension appends its own footer.
+pub fn render(function: &FunctionHealth, locale: Locale) -> String {
+    let worst = function.scores.worst_pillar();
     let mut out = format!(
-        "**`{name}`** — quality **{quality:.0}%** ({grade})\n\
+        "**`{name}`**  ·  {quality_label} **{quality:.0}%**  ·  {grade}\n\
          \n\
-         | pillar | metric | value | score |\n\
-         | --- | --- | ---: | ---: |\n",
+         {overall}\n\
+         \n\
+         | {pillar} | {metric} | {value} | {score} |\n\
+         | :-- | :-- | --: | :-- |\n",
         name = function.display_name(),
+        quality_label = locale.t("quality"),
         quality = function.quality,
-        grade = function.grade,
+        grade = locale.t(function.grade.as_str()),
+        overall = bar(function.quality),
+        pillar = locale.t("pillar"),
+        metric = locale.t("metric"),
+        value = locale.t("value"),
+        score = locale.t("score"),
     );
     for pillar in function.scores.pillars() {
         for (index, metric) in pillar.measures.iter().enumerate() {
             out.push_str(&format!(
-                "| {label} | {metric} | {value:.0} | {score:.0}% ({grade}) |\n",
+                "| {label} | {metric} | {value:.0} / {threshold:.0} | {bar} {score:.0}% |\n",
                 // The pillar is named once, on the row of its first metric.
-                label = if index == 0 { pillar.name } else { "" },
-                metric = metric.name,
+                label = if index == 0 {
+                    locale.t(pillar.name)
+                } else {
+                    ""
+                },
+                metric = locale.t(metric.name),
                 value = metric.value,
+                threshold = metric.threshold,
+                bar = bar(metric.score),
                 score = metric.score,
-                grade = Grade::of(metric.score),
             ));
         }
+    }
+    if let Some(metric) = worst.worst_measure() {
+        out.push('\n');
+        out.push_str(&locale.fill(
+            "Weakest: **{0}** — {1} {2} against a threshold of {3}, scoring {4}% ({5}).",
+            &[
+                locale.t(worst.name),
+                locale.t(metric.name),
+                &format!("{:.0}", metric.value),
+                &format!("{:.0}", metric.threshold),
+                &format!("{:.0}", metric.score),
+                locale.t(Grade::of(metric.score).as_str()),
+            ],
+        ));
+        out.push('\n');
     }
     out
 }
@@ -161,7 +215,7 @@ fn other() -> u32 {
     #[test]
     fn rendering_names_every_pillar_and_metric() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap());
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
         for expected in [
             "outer",
             "quality",
@@ -184,9 +238,93 @@ fn other() -> u32 {
     }
 
     #[test]
+    fn a_chinese_reader_gets_the_vocabulary_and_the_sentences() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::SimplifiedChinese);
+        for expected in [
+            "质量",
+            "支柱",
+            "指标",
+            "控制流",
+            "认知复杂度",
+            "规模",
+            "语句数",
+            "词汇负担",
+            "工作记忆",
+            "接口",
+            "参数个数",
+            "最弱：",
+        ] {
+            assert!(
+                markdown.contains(expected),
+                "{expected} missing:\n{markdown}"
+            );
+        }
+        assert!(
+            !markdown.contains("cognitive complexity"),
+            "nothing is left half-translated:\n{markdown}"
+        );
+        // The function's own name is the reader's, not ours to translate.
+        assert!(markdown.contains("outer"), "{markdown}");
+    }
+
+    #[test]
+    fn a_bar_fills_in_proportion_to_the_score() {
+        assert_eq!(bar(0.0), "░░░░░░░░░░");
+        assert_eq!(bar(100.0), "██████████");
+        assert_eq!(bar(50.0), "█████░░░░░");
+        // A score can only be in (0, 100], but the bar must not panic on
+        // subtracting past zero if that ever stops being true.
+        assert_eq!(bar(-20.0), "░░░░░░░░░░");
+        assert_eq!(bar(140.0), "██████████");
+        assert_eq!(bar(f64::NAN).chars().count(), BAR_CELLS);
+    }
+
+    #[test]
+    fn a_bar_is_never_wrapped_in_a_code_span() {
+        // VS Code draws inline code with a background and padding, which
+        // would put a gap on either side of every bar.
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        for line in markdown.lines() {
+            assert!(
+                !line.contains("`\u{2588}") && !line.contains("`\u{2591}"),
+                "bar in a code span: {line}"
+            );
+            assert!(
+                !line.contains("\u{2588}`") && !line.contains("\u{2591}`"),
+                "bar in a code span: {line}"
+            );
+        }
+    }
+
+    #[test]
+    fn every_metric_is_shown_against_its_threshold() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        // The defaults, so a reader can see what a number is judged against.
+        assert!(markdown.contains("/ 15"), "{markdown}");
+        assert!(markdown.contains("/ 10"), "{markdown}");
+        assert!(markdown.contains("/ 30"), "{markdown}");
+        assert!(markdown.contains("/ 4"), "{markdown}");
+    }
+
+    #[test]
+    fn the_weakest_pillar_is_called_out_under_the_table() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        let weakest = markdown
+            .lines()
+            .find(|line| line.starts_with("Weakest:"))
+            .unwrap_or_else(|| panic!("no weakest line:\n{markdown}"));
+        let worst = at(&report, 1, 4).unwrap().scores.worst_pillar();
+        assert!(weakest.contains(worst.name), "{weakest}");
+    }
+
+    #[test]
     fn a_pillar_is_named_once_however_many_metrics_it_has() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap());
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
         assert_eq!(
             markdown.matches("| control flow |").count(),
             1,

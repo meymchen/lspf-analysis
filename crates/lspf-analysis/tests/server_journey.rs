@@ -15,6 +15,7 @@ use lspf::types::{
 };
 use lspf::{MemoryFileProvider, RawMessage, RequestId};
 use lspf_analysis::config::Settings;
+use lspf_analysis::functions::{FunctionHealthParams, FunctionHealthResult};
 use lspf_analysis::status::FileHealthParams;
 
 const SIMPLE: &str = "fn add(a: u32, b: u32) -> u32 {\n    a + b\n}\n";
@@ -326,6 +327,45 @@ async fn hover_reports_every_pillar() {
 }
 
 #[tokio::test]
+async fn a_chinese_client_gets_chinese_display_text() {
+    // The editor's display language reaches the server as a setting, and
+    // decides the text a person reads — but nothing a client keys off.
+    let uri = uri();
+    let mut journey = start_with_options(serde_json::json!({
+        "lspfAnalysis": { "locale": "zh-cn", "health": { "qualityWarn": 100.0 } }
+    }))
+    .await;
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+
+    // The payloads keep their English vocabulary whatever the reader sees.
+    // The summary is read first because it is sent first, and reading past a
+    // notification discards it.
+    let health = file_health(&mut journey).await;
+    assert_eq!(health.grade, "excellent");
+    assert_eq!(health.worst[0].weakest_pillar, "interface");
+
+    let published = diagnostics(&mut journey).await;
+    let text = message(&published.diagnostics[0]);
+    assert!(text.starts_with("函数 `add`："), "{text}");
+    assert_eq!(
+        published.diagnostics[0].source.as_deref(),
+        Some("lspf-analysis"),
+        "the source is an identifier, not display text"
+    );
+
+    let value = function_health(&mut journey, 40, &uri).await;
+    let detail: FunctionHealthResult = serde_json::from_value(value).unwrap();
+    assert_eq!(detail.functions[0].grade, "excellent");
+    assert_eq!(detail.functions[0].pillars[0].name, "control flow");
+    assert_eq!(
+        detail.functions[0].pillars[0].measures[0].name,
+        "cognitive complexity"
+    );
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
 async fn hover_off_the_name_leaves_the_editor_alone() {
     // Metrics supplement the editor's own hover, so they must not answer for
     // a parameter or a line inside the body.
@@ -379,14 +419,125 @@ async fn every_analysis_reports_the_file_total() {
     assert_eq!(health.functions, 1);
     assert_eq!(health.below, 1, "the one function is below the threshold");
     assert_eq!(health.grade, "poor");
+    assert_eq!(health.bands.poor, 1, "{:?}", health.bands);
     let worst = health
         .worst
-        .expect("a file with a function has a worst one");
+        .first()
+        .expect("a file with a function lists one");
     assert_eq!(worst.name, "tangled");
     assert_eq!(worst.line, 1);
+    assert_eq!(worst.weakest_pillar, "control flow");
 
     // The summary travels alongside the diagnostics, not instead of them.
     assert_eq!(diagnostics(&mut journey).await.diagnostics.len(), 1);
+
+    journey.finish().await.unwrap();
+}
+
+/// Sends `lspfAnalysis/functionHealth` and decodes what comes back.
+async fn function_health(journey: &mut ServerJourney, id: i32, uri: &Uri) -> serde_json::Value {
+    journey
+        .peer()
+        .send(request(
+            id,
+            "lspfAnalysis/functionHealth",
+            &FunctionHealthParams { uri: uri.clone() },
+        ))
+        .unwrap();
+
+    let response = journey.peer().recv().await.unwrap();
+    let RawMessage::Response {
+        id: responded,
+        result: Ok(result),
+    } = response
+    else {
+        panic!("expected a successful functionHealth response, got {response:?}");
+    };
+    assert_eq!(responded, RequestId::Number(id));
+    serde_json::from_slice(&result).expect("function health result decode")
+}
+
+#[tokio::test]
+async fn function_health_reports_every_function_in_detail() {
+    // What a client needs to draw its own list: the numbers, not a rendering
+    // of them.
+    let uri = uri();
+    let mut journey = start().await;
+    let source = format!("{SIMPLE}\n{}", tangled());
+    journey.peer().send(open(&uri, &source)).unwrap();
+    assert_eq!(diagnostics(&mut journey).await.diagnostics.len(), 1);
+
+    let value = function_health(&mut journey, 30, &uri).await;
+    let detail: FunctionHealthResult =
+        serde_json::from_value(value).expect("the wire types decode the wire format");
+    assert_eq!(detail.uri, uri);
+
+    let names: Vec<&str> = detail
+        .functions
+        .iter()
+        .map(|function| function.name.as_str())
+        .collect();
+    assert_eq!(names, ["add", "tangled"], "source order, not worst first");
+
+    let tangled = &detail.functions[1];
+    assert_eq!(tangled.grade, "poor");
+    assert_eq!(tangled.weakest_pillar, "control flow");
+    assert!(tangled.start_line < tangled.end_line);
+    assert_eq!(
+        tangled
+            .pillars
+            .iter()
+            .map(|pillar| pillar.name.as_str())
+            .collect::<Vec<_>>(),
+        ["control flow", "size", "vocabulary load", "interface"]
+    );
+    let parameters = tangled
+        .pillars
+        .iter()
+        .flat_map(|pillar| pillar.measures.iter())
+        .find(|measure| measure.name == "parameters")
+        .expect("the interface pillar reports its measure");
+    assert_eq!(parameters.value, 5.0, "`tangled` takes five");
+    assert_eq!(parameters.threshold, 4.0, "against the shipped default");
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn function_health_follows_the_configured_thresholds() {
+    let uri = uri();
+    let mut journey = start_with_options(serde_json::json!({
+        "lspfAnalysis": { "health": { "parametersThreshold": 1.0 } }
+    }))
+    .await;
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    assert!(diagnostics(&mut journey).await.diagnostics.is_empty());
+
+    let value = function_health(&mut journey, 31, &uri).await;
+    let detail: FunctionHealthResult = serde_json::from_value(value).unwrap();
+    let interface = detail.functions[0]
+        .pillars
+        .iter()
+        .find(|pillar| pillar.name == "interface")
+        .expect("every function carries every pillar");
+    assert_eq!(interface.measures[0].threshold, 1.0);
+    assert_eq!(
+        detail.functions[0].weakest_pillar, "interface",
+        "the tightened threshold is what now scores worst"
+    );
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn function_health_for_an_unanalyzed_document_answers_nothing() {
+    // A client can ask about any URI it has; one the server never scored is
+    // answered with null rather than an error, as hover answers a position
+    // it has nothing to say about.
+    let mut journey = start().await;
+    let unopened = Uri::from_str("file:///workspace/src/never-opened.rs").unwrap();
+    let value = function_health(&mut journey, 32, &unopened).await;
+    assert!(value.is_null(), "{value}");
 
     journey.finish().await.unwrap();
 }

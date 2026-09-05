@@ -16,7 +16,10 @@ Supported languages: **JavaScript**, **Python**, **Rust**, **TypeScript**,
 Hovering a function's name shows its measurements; a function below the
 quality threshold gets a diagnostic on its signature line. The hover answers
 on the name and nowhere else, so it adds to whatever the editor already says
-about a symbol rather than displacing it.
+about a symbol rather than displacing it. A client that would rather draw its
+own list than read one function at a time asks for
+[the per-function breakdown](#the-per-function-breakdown); the VS Code
+extension puts it in an Explorer tree.
 
 Quality is blended from four pillars. Each pillar takes the **worst** of its
 metrics rather than their average, so a function cannot hide a bad number
@@ -221,12 +224,73 @@ notification:
   "grade": "good",
   "functions": 7,
   "below": 1,
-  "worst": { "name": "tangled", "quality": 22.1, "grade": "poor", "line": 84 }
+  "bands": { "excellent": 4, "good": 2, "fair": 0, "poor": 1 },
+  "worst": [
+    {
+      "name": "tangled",
+      "quality": 22.1,
+      "grade": "poor",
+      "line": 84,
+      "weakestPillar": "control flow",
+      "weakestMetric": "cognitive complexity"
+    }
+  ]
 }
 ```
 
-The VS Code extension puts this in the status bar. A client that does not
-listen for the method ignores it, so nothing else has to change.
+The `bands` counts and the `worst` list — capped by `worstFunctions` — are
+what the VS Code extension draws in its status bar hover. A client that does
+not listen for the method ignores it, so nothing else has to change.
+
+### The per-function breakdown
+
+A client drawing its own UI needs the numbers rather than a rendering of
+them, so it can ask for every function of one document with the
+`lspfAnalysis/functionHealth` request:
+
+```json
+{ "uri": "file:///src/lib.rs" }
+```
+
+which answers with the functions in source order, each down to the measure
+that set each pillar:
+
+```json
+{
+  "uri": "file:///src/lib.rs",
+  "functions": [
+    {
+      "name": "tangled",
+      "startLine": 84,
+      "endLine": 131,
+      "quality": 22.1,
+      "grade": "poor",
+      "weakestPillar": "control flow",
+      "weakestMetric": "cognitive complexity",
+      "pillars": [
+        {
+          "name": "control flow",
+          "score": 11.9,
+          "measures": [
+            {
+              "name": "cognitive complexity",
+              "value": 41,
+              "threshold": 15,
+              "score": 11.9
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+The answer is `null` for a document the server has not analyzed. This is a
+request rather than another field on `fileHealth` because that notification
+is pushed on every keystroke, while the breakdown is an order of magnitude
+more JSON that only a client with a view open has any use for. The VS Code
+extension pulls it for its Function Health tree.
 
 ### Configuration
 
@@ -245,7 +309,8 @@ and changing them republishes every open document:
       "enabled": true,
       "perMetric": false,
       "file": false
-    }
+    },
+    "locale": "zh-cn"
   }
 }
 ```
@@ -257,6 +322,20 @@ and changing them republishes every open document:
 
 For a client that sends no configuration at all, `LSPF_ANALYSIS_SETTINGS` in
 the environment takes the same JSON.
+
+### Language
+
+`locale` is the editor's language tag — `zh-cn`, `en`, whatever the client
+has. Simplified Chinese and English are translated; anything else renders
+English rather than a guess. The VS Code extension sends its own display
+language, so nothing has to be set there.
+
+It only decides text a person reads: hovers and diagnostic messages. What
+travels in `lspfAnalysis/fileHealth` and `lspfAnalysis/functionHealth` — the
+pillar and metric names, the grade words — stays English whatever the reader
+sees, because a client keys off it. So does a diagnostic's `code` and
+`source`. A client that draws its own UI translates that vocabulary itself,
+as the VS Code extension does.
 
 ## Running from the command line
 

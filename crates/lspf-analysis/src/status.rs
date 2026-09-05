@@ -7,7 +7,7 @@
 
 use lspf::types::Uri;
 use lspf::types::notification::Notification;
-use lspf_analysis_core::health::FileHealth;
+use lspf_analysis_core::health::{FileHealth, FunctionHealth, Grade};
 use serde::{Deserialize, Serialize};
 
 use crate::config::Settings;
@@ -39,11 +39,25 @@ pub struct FileHealthParams {
     /// How many of them are below the warning threshold, and so already
     /// carry a diagnostic.
     pub below: usize,
-    /// The lowest-scoring function, when the file has one.
-    pub worst: Option<WorstFunction>,
+    /// How many functions landed in each band, so a client can show the
+    /// shape of the file rather than one number standing for all of it.
+    pub bands: Bands,
+    /// The functions a reader should open first, worst first, capped by
+    /// [`HealthConfig::worst_functions`](lspf_analysis_core::health::HealthConfig).
+    pub worst: Vec<WorstFunction>,
 }
 
-/// The one function a reader should open first.
+/// How a file's functions are spread across the four bands.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Bands {
+    pub excellent: usize,
+    pub good: usize,
+    pub fair: usize,
+    pub poor: usize,
+}
+
+/// One function worth opening, and enough to navigate to it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorstFunction {
@@ -52,22 +66,55 @@ pub struct WorstFunction {
     pub grade: String,
     /// Where it starts, 1-based, so the client can offer to go there.
     pub line: usize,
+    /// The pillar that set its score, and the metric behind that pillar.
+    pub weakest_pillar: String,
+    pub weakest_metric: String,
 }
 
 /// Summarizes an analyzed file for the client.
 pub fn summarize(uri: &Uri, report: &FileHealth, settings: &Settings) -> FileHealthParams {
+    let mut bands = Bands::default();
+    for function in &report.functions {
+        let counter = match function.grade {
+            Grade::Excellent => &mut bands.excellent,
+            Grade::Good => &mut bands.good,
+            Grade::Fair => &mut bands.fair,
+            Grade::Poor => &mut bands.poor,
+        };
+        *counter += 1;
+    }
+
+    let mut ranked: Vec<&FunctionHealth> = report.functions.iter().collect();
+    ranked.sort_by(|a, b| a.quality.total_cmp(&b.quality));
+
     FileHealthParams {
         uri: uri.clone(),
         quality: report.quality,
         grade: report.grade.to_string(),
         functions: report.functions.len(),
         below: report.below(settings.health.quality_warn).len(),
-        worst: report.worst().map(|function| WorstFunction {
-            name: function.display_name().to_string(),
-            quality: function.quality,
-            grade: function.grade.to_string(),
-            line: function.start_line,
-        }),
+        bands,
+        worst: ranked
+            .into_iter()
+            .take(settings.health.worst_functions)
+            .map(describe)
+            .collect(),
+    }
+}
+
+/// Describes one function for the client's list.
+fn describe(function: &FunctionHealth) -> WorstFunction {
+    let pillar = function.scores.worst_pillar();
+    WorstFunction {
+        name: function.display_name().to_string(),
+        quality: function.quality,
+        grade: function.grade.to_string(),
+        line: function.start_line,
+        weakest_pillar: pillar.name.to_string(),
+        weakest_metric: pillar
+            .worst_measure()
+            .map(|metric| metric.name.to_string())
+            .unwrap_or_default(),
     }
 }
 
@@ -104,10 +151,37 @@ mod tests {
     }
 
     #[test]
-    fn the_worst_function_is_named() {
-        let worst = summary(&Settings::default()).worst.unwrap();
+    fn the_worst_functions_are_listed_worst_first() {
+        let summary = summary(&Settings::default());
+        assert_eq!(summary.worst.len(), 2, "both functions fit under the cap");
+        assert!(
+            summary.worst[0].quality <= summary.worst[1].quality,
+            "{:?}",
+            summary.worst
+        );
+        let worst = &summary.worst[0];
         assert!(["add", "one"].contains(&worst.name.as_str()), "{worst:?}");
         assert_eq!(worst.grade, "excellent");
+        assert!(!worst.weakest_pillar.is_empty());
+        assert!(!worst.weakest_metric.is_empty());
+    }
+
+    #[test]
+    fn the_bands_account_for_every_function() {
+        let bands = summary(&Settings::default()).bands;
+        assert_eq!(bands.excellent, 2);
+        assert_eq!(
+            bands.excellent + bands.good + bands.fair + bands.poor,
+            2,
+            "{bands:?}"
+        );
+    }
+
+    #[test]
+    fn the_worst_list_is_capped_by_the_configured_count() {
+        let mut settings = Settings::default();
+        settings.health.worst_functions = 1;
+        assert_eq!(summary(&settings).worst.len(), 1);
     }
 
     #[test]

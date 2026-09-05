@@ -58,6 +58,9 @@ pub struct Measure {
     pub name: &'static str,
     /// The raw value the engine computed.
     pub value: f64,
+    /// The value that would score 50%. Carried so a report can say what a
+    /// number is being judged against, rather than only how it scored.
+    pub threshold: f64,
     /// What that value scores, from 0 to 100.
     pub score: f64,
 }
@@ -274,6 +277,7 @@ fn measure(name: &'static str, value: f64, threshold: f64) -> Measure {
     Measure {
         name,
         value,
+        threshold,
         score: pillar_score(value, threshold),
     }
 }

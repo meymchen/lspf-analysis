@@ -1,5 +1,10 @@
+import { functionLabel, gradeLabel, measureLabel, pillarLabel, t } from './i18n.js';
+
 /** The `lspfAnalysis/fileHealth` notification the server pushes per file. */
 export const FILE_HEALTH_METHOD = 'lspfAnalysis/fileHealth';
+
+/** Reveals a function the tooltip lists. Registered by the extension. */
+export const GO_TO_FUNCTION_COMMAND = 'lspfAnalysis.goToFunction';
 
 export interface WorstFunction {
     name: string;
@@ -7,6 +12,15 @@ export interface WorstFunction {
     grade: string;
     /** Where it starts, 1-based. */
     line: number;
+    weakestPillar: string;
+    weakestMetric: string;
+}
+
+export interface Bands {
+    excellent: number;
+    good: number;
+    fair: number;
+    poor: number;
 }
 
 export interface FileHealth {
@@ -16,7 +30,9 @@ export interface FileHealth {
     functions: number;
     /** How many functions already carry a diagnostic. */
     below: number;
-    worst?: WorstFunction | null;
+    bands: Bands;
+    /** Worst first, capped by the server's `worstFunctions` setting. */
+    worst: WorstFunction[];
 }
 
 export interface StatusText {
@@ -26,8 +42,22 @@ export interface StatusText {
     warning: boolean;
 }
 
+/** How many cells a score bar is drawn with. */
+const BAR_CELLS = 10;
+
+/**
+ * Draws a 0-100 score as a bar, the way the server draws them in hovers.
+ *
+ * Never wrapped in a code span: VS Code draws inline code with a background
+ * and horizontal padding, which puts a gap on either side of the bar.
+ */
+export function bar(score: number): string {
+    const filled = Math.min(BAR_CELLS, Math.max(0, Math.round((score / 100) * BAR_CELLS)));
+    return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled);
+}
+
 /** The codicon standing in for each band. */
-function icon(grade: string): string {
+export function icon(grade: string): string {
     switch (grade) {
         case 'excellent':
             return '$(pass)';
@@ -40,30 +70,122 @@ function icon(grade: string): string {
     }
 }
 
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? '' : 's'}`;
+/** Encodes command arguments the way a `command:` URI needs them. */
+function commandLink(command: string, args: unknown[]): string {
+    return `command:${command}?${encodeURIComponent(JSON.stringify(args))}`;
+}
+
+/**
+ * Renders the band spread as one line of bars.
+ *
+ * A single percentage says how the file scores; this says how it is shaped,
+ * which is what tells a reader whether one bad function is dragging an
+ * otherwise healthy file down.
+ */
+function bandLine(bands: Bands, total: number): string {
+    if (total === 0) {
+        return '';
+    }
+    const cells = 20;
+    const order: Array<[keyof Bands, string]> = [
+        ['excellent', '█'],
+        ['good', '▓'],
+        ['fair', '▒'],
+        ['poor', '░'],
+    ];
+    let drawn = '';
+    for (const [band, glyph] of order) {
+        drawn += glyph.repeat(Math.round((bands[band] / total) * cells));
+    }
+    return drawn.slice(0, cells).padEnd(cells, '░');
+}
 
 /**
  * Renders a file's health for the status bar.
  *
- * The bar itself only has room for the band and the number; everything a
- * reader would act on goes in the tooltip.
+ * The bar itself has room for the band and the number; everything a reader
+ * would act on goes in the tooltip, which VS Code renders as Markdown and
+ * lets the pointer move onto.
  */
 export function renderStatus(health: FileHealth): StatusText {
     const quality = Math.round(health.quality);
+    const attention = health.below > 0 ? `  $(alert)${health.below}` : '';
+
     const lines = [
-        `**LSPF Analysis** — file quality **${quality}%** (${health.grade})`,
+        `**LSPF Analysis**  ·  ${icon(health.grade)} **${quality}%**  ·  ${gradeLabel(
+            health.grade,
+        )}`,
         '',
-        `${plural(health.functions, 'function')} analyzed, ${health.below} below the warning threshold.`,
+        bar(health.quality),
+        '',
     ];
-    if (health.worst) {
+
+    if (health.functions === 0) {
+        lines.push(t('No functions to analyze in this file.'));
+    } else {
         lines.push(
+            // Singular and plural are separate source strings rather than a
+            // suffix, because a language without plurals cannot be given one
+            // by appending to a translation.
+            health.functions === 1
+                ? t('{0} function, {1} below the warning threshold.', 1, health.below)
+                : t(
+                      '{0} functions, {1} below the warning threshold.',
+                      health.functions,
+                      health.below,
+                  ),
             '',
-            `Worst: \`${health.worst.name}\` at ${Math.round(health.worst.quality)}% ` +
-                `(${health.worst.grade}), line ${health.worst.line}.`,
+            bandLine(health.bands, health.functions),
+            '',
+            `| | ${t('band')} | ${t('functions')} |`,
+            '| :-- | :-- | --: |',
+            `| $(pass) | ${gradeLabel('excellent')} | ${health.bands.excellent} |`,
+            `| $(check) | ${gradeLabel('good')} | ${health.bands.good} |`,
+            `| $(warning) | ${gradeLabel('fair')} | ${health.bands.fair} |`,
+            `| $(error) | ${gradeLabel('poor')} | ${health.bands.poor} |`,
         );
     }
+
+    if (health.worst.length > 0) {
+        lines.push('', '---', '', `**${t('Worth opening first')}**`, '');
+        for (const worst of health.worst) {
+            const link = commandLink(GO_TO_FUNCTION_COMMAND, [health.uri, worst.line]);
+            const title = t('Go to line {0}', worst.line);
+            // The score and the verdict are one source string, so that the
+            // punctuation between them belongs to the language it is read in
+            // rather than to this template.
+            const verdict = worst.weakestMetric
+                ? t(
+                      '**{0}%**, weakest {1} ({2})',
+                      Math.round(worst.quality),
+                      pillarLabel(worst.weakestPillar),
+                      measureLabel(worst.weakestMetric),
+                  )
+                : t(
+                      '**{0}%**, weakest {1}',
+                      Math.round(worst.quality),
+                      pillarLabel(worst.weakestPillar),
+                  );
+            lines.push(
+                `- ${icon(worst.grade)} [\`${functionLabel(worst.name)}\`](${link} "${title}")` +
+                    ` — ${verdict}`,
+            );
+        }
+    }
+
+    lines.push(
+        '',
+        '---',
+        '',
+        `[$(list-flat) ${t('Problems')}](command:workbench.actions.view.problems)` +
+            `  ·  [$(gear) ${t('Settings')}](${commandLink('workbench.action.openSettings', [
+                'lspfAnalysis',
+            ])})` +
+            `  ·  [$(refresh) ${t('Restart server')}](command:lspfAnalysis.restartServer)`,
+    );
+
     return {
-        text: `${icon(health.grade)} ${quality}%`,
+        text: `${icon(health.grade)} ${quality}%${attention}`,
         tooltip: lines.join('\n'),
         warning: health.grade === 'poor' || health.grade === 'fair',
     };
@@ -81,12 +203,17 @@ export function isFileHealth(value: unknown): value is FileHealth {
         return false;
     }
     const candidate = value as Record<string, unknown>;
+    const bands = candidate.bands as Record<string, unknown> | undefined;
     return (
         typeof candidate.uri === 'string' &&
         typeof candidate.quality === 'number' &&
         Number.isFinite(candidate.quality) &&
         typeof candidate.grade === 'string' &&
         typeof candidate.functions === 'number' &&
-        typeof candidate.below === 'number'
+        typeof candidate.below === 'number' &&
+        Array.isArray(candidate.worst) &&
+        typeof bands === 'object' &&
+        bands !== null &&
+        ['excellent', 'good', 'fair', 'poor'].every((band) => typeof bands[band] === 'number')
     );
 }
