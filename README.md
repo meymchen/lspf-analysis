@@ -381,8 +381,24 @@ lspf-analysis metrics --paths src -I '*.rs' -X '*/generated/*' -j 8
 
 Without `--output-format` this prints the metrics tree per file plus each
 file's quality; with one, it serializes `{metrics, health}` per file as
-`json`, `yaml`, `toml`, or `cbor`. Either way it ends with a repository
-summary: overall quality, the count in each band, and the worst functions.
+`json`, `toon`, or `cbor` — one for a program, one for a model, one for the
+wire. Either way it ends with a repository summary: overall quality, the
+count in each band, and the worst functions.
+
+[`toon`](https://github.com/toon-format/toon) is for a report headed into a
+model's context rather than a program's parser. A report is mostly rows that
+say the same thing about different metrics, and TOON writes those keys once
+as a header instead of on every row:
+
+```toon
+measures[2]{name,value,threshold,score}:
+  cognitive complexity,10,15,69.23076923076923
+  cyclomatic complexity,5,10,80
+```
+
+which on this repository's own sources comes out about a third smaller than
+the same report as indented JSON. It has a single spelling, so `--pr` does
+nothing to it.
 
 ## Building and testing
 

@@ -9,13 +9,12 @@ use serde::Serialize;
 pub enum Format {
     Cbor,
     Json,
-    Toml,
-    Yaml,
+    Toon,
 }
 
 impl Format {
     pub const fn all() -> &'static [&'static str] {
-        &["cbor", "json", "toml", "yaml"]
+        &["cbor", "json", "toon"]
     }
 
     pub fn dump_formats<T: Serialize>(
@@ -29,14 +28,12 @@ impl Format {
             match self {
                 Self::Cbor => Cbor::with_writer(space, path, output_path),
                 Self::Json => Json::with_pretty_writer(space, path, output_path, pretty),
-                Self::Toml => Toml::with_pretty_writer(space, path, output_path, pretty),
-                Self::Yaml => Yaml::with_writer(space, path, output_path),
+                Self::Toon => Toon::with_writer(space, path, output_path),
             }
         } else {
             match self {
                 Self::Json => Json::write_on_stdout_pretty(space, pretty),
-                Self::Toml => Toml::write_on_stdout_pretty(space, pretty),
-                Self::Yaml => Yaml::write_on_stdout(space),
+                Self::Toon => Toon::write_on_stdout(space),
                 Self::Cbor => panic!("Cbor format cannot be printed to stdout"),
             }
         }
@@ -50,8 +47,7 @@ impl FromStr for Format {
         match format {
             "cbor" => Ok(Self::Cbor),
             "json" => Ok(Self::Json),
-            "toml" => Ok(Self::Toml),
-            "yaml" => Ok(Self::Yaml),
+            "toon" => Ok(Self::Toon),
             format => Err(format!("{format:?} is not a supported format")),
         }
     }
@@ -167,60 +163,28 @@ impl WritePrettyFile for Json {
     }
 }
 
-struct Toml;
+/// [TOON](https://github.com/toon-format/toon), for a report that goes into
+/// an LLM's context rather than a program's parser: the same data as the JSON,
+/// spelled to cost fewer tokens. It has one shape, so `--pr` says nothing here.
+struct Toon;
 
-impl WriteOnStdout for Toml {
+impl WriteOnStdout for Toon {
     fn format<T: Serialize>(content: T) -> String {
-        toml::to_string(&content).unwrap()
+        toon_format::encode(&content, &toon_format::EncodeOptions::default()).unwrap()
     }
 }
 
-impl WritePrettyOnStdout for Toml {
-    fn format_pretty<T: Serialize>(content: T) -> String {
-        toml::to_string_pretty(&content).unwrap()
-    }
-}
-
-impl WriteFile for Toml {
-    const EXTENSION: &'static str = ".toml";
+impl WriteFile for Toon {
+    const EXTENSION: &'static str = ".toon";
 
     fn with_writer<T: Serialize>(content: T, path: PathBuf, output_path: &Path) {
-        Self::open_file(path, output_path)
-            .write_all(Self::format(content).as_bytes())
-            .unwrap();
-    }
-}
-
-impl WritePrettyFile for Toml {
-    fn with_pretty_writer<T: Serialize>(
-        content: T,
-        path: PathBuf,
-        output_path: &Path,
-        pretty: bool,
-    ) {
-        if pretty {
-            Self::open_file(path, output_path)
-                .write_all(Self::format_pretty(&content).as_bytes())
-                .unwrap();
-        } else {
-            Self::with_writer(content, path, output_path);
-        }
-    }
-}
-
-struct Yaml;
-
-impl WriteOnStdout for Yaml {
-    fn format<T: Serialize>(content: T) -> String {
-        serde_yaml::to_string(&content).unwrap()
-    }
-}
-
-impl WriteFile for Yaml {
-    const EXTENSION: &'static str = ".yml";
-
-    fn with_writer<T: Serialize>(content: T, path: PathBuf, output_path: &Path) {
-        serde_yaml::to_writer(Self::open_file(path, output_path), &content).unwrap()
+        // The encoder leaves off the final newline; a line-oriented file wants it.
+        writeln!(
+            Self::open_file(path, output_path),
+            "{}",
+            Self::format(content)
+        )
+        .unwrap();
     }
 }
 
@@ -231,5 +195,89 @@ impl WriteFile for Cbor {
 
     fn with_writer<T: Serialize>(content: T, path: PathBuf, output_path: &Path) {
         serde_cbor::to_writer(Self::open_file(path, output_path), &content).unwrap()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs::{read_to_string, remove_dir_all};
+
+    use super::*;
+
+    /// A report in miniature: a nested object, and a list of records whose
+    /// keys repeat — which is the shape TOON is built to compress.
+    #[derive(Serialize)]
+    struct Measure {
+        name: &'static str,
+        value: f64,
+        threshold: f64,
+    }
+
+    #[derive(Serialize)]
+    struct Pillar {
+        name: &'static str,
+        measures: Vec<Measure>,
+    }
+
+    fn a_pillar() -> Pillar {
+        Pillar {
+            name: "control flow",
+            measures: vec![
+                Measure {
+                    name: "cognitive complexity",
+                    value: 10.0,
+                    threshold: 15.0,
+                },
+                Measure {
+                    name: "cyclomatic complexity",
+                    value: 5.0,
+                    threshold: 10.0,
+                },
+            ],
+        }
+    }
+
+    #[test]
+    fn every_advertised_format_parses() {
+        for name in Format::all() {
+            assert!(name.parse::<Format>().is_ok(), "{name} does not parse");
+        }
+        assert!("bson".parse::<Format>().is_err());
+    }
+
+    #[test]
+    fn toon_is_one_of_them() {
+        assert!(Format::all().contains(&"toon"));
+        assert!(matches!("toon".parse::<Format>(), Ok(Format::Toon)));
+    }
+
+    #[test]
+    fn toon_writes_repeated_keys_once_as_a_table_header() {
+        let encoded = Toon::format(a_pillar());
+        assert_eq!(
+            encoded,
+            "name: control flow\n\
+             measures[2]{name,value,threshold}:\n  \
+               cognitive complexity,10,15\n  \
+               cyclomatic complexity,5,10"
+        );
+    }
+
+    #[test]
+    fn dumping_toon_writes_one_file_per_source_file() {
+        let output = std::env::temp_dir().join("lspf_analysis_toon_dump");
+        let _ = remove_dir_all(&output);
+        create_dir_all(&output).unwrap();
+
+        Format::Toon.dump_formats(
+            a_pillar(),
+            PathBuf::from("/src/deep/hover.rs"),
+            Some(&output),
+            false,
+        );
+
+        let written = read_to_string(output.join("src/deep/hover.rs.toon")).unwrap();
+        assert_eq!(written, Toon::format(a_pillar()) + "\n");
+        remove_dir_all(&output).unwrap();
     }
 }
