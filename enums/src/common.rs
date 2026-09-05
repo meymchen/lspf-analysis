@@ -1,5 +1,5 @@
-use std::collections::hash_map::{Entry, HashMap};
 use std::collections::BTreeMap;
+use std::collections::hash_map::{Entry, HashMap};
 use tree_sitter::Language;
 
 pub fn capitalize(s: &str) -> String {

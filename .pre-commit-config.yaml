@@ -9,13 +9,22 @@ repos:
     -   id: check-json
 -   repo: local
     hooks:
-      # FIXME: Uncomment when fmt is fixed
-      # - id: fmt
-      #   name: fmt
-      #   language: system
-      #   files: '\.rs$'
-      #   exclude: '.*/templates/.*\.rs$'
-      #   entry: cargo fmt -- --check --verbose
+      - id: fmt
+        name: fmt (workspace)
+        language: system
+        files: '\.rs$|(^|/)Cargo\.toml$'
+        exclude: '^enums/'
+        entry: cargo fmt --all -- --check
+        pass_filenames: false
+
+      # enums is excluded from the root Cargo workspace.
+      - id: fmt-enums
+        name: fmt (enums)
+        language: system
+        files: '^enums/(.*\.rs|Cargo\.toml)$'
+        exclude: '^enums/templates/'
+        entry: cargo fmt --manifest-path enums/Cargo.toml -- --check
+        pass_filenames: false
 
       - id: clippy
         name: clippy
