@@ -55,18 +55,24 @@ Each metric is scored on its own before anything is blended, so a function is
 never rescued by being short if it is impenetrable. A raw value $r \ge 0$
 with threshold $t > 0$ scores
 
-$$ s(r) = \frac{100}{1 + \left(\dfrac{r}{t}\right)^{2}} $$
+$$
+s(r) = \frac{100}{1 + \left(\dfrac{r}{t}\right)^{2}}
+$$
 
 giving $s(0) = 100$, $s(t) = 50$, $s(2t) = 20$ and $s(3t) = 10$ — smooth,
 monotone, and always in $(0, 100]$.
 
 A pillar $P$ scores at its worst metric,
 
-$$ s_P = \min_{m \in P} s(r_m) $$
+$$
+s_P = \min_{m \in P} s(r_m)
+$$
 
 and the pillars blend into quality as a weighted geometric mean:
 
-$$ Q = \prod_{P} s_P^{\,w_P}, \qquad \sum_{P} w_P = 1 $$
+$$
+Q = \prod_{P} s_P^{\,w_P}, \qquad \sum_{P} w_P = 1
+$$
 
 A geometric mean rather than an arithmetic one, so one collapsed pillar drags
 the whole score down instead of hiding behind the others.
@@ -78,6 +84,21 @@ factor is absent and the file scores exactly what its functions do.
 
 Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25),
 **poor** (<25).
+
+### Cognitive complexity coverage
+
+Cognitive complexity adds one point to each function in a recursion cycle
+resolved within the current file. Resolution uses unique lexical names;
+Java calls additionally require a private, static, or final method with a
+matching fixed argument count. Ambiguous bindings and dynamic receivers are
+skipped.
+
+For Rust, unqualified `assert!`, `dbg!`, and `vec!` calls contribute the
+complexity of their visible argument expressions, including nested macros
+and the caller's nesting level. Macro expansion is not performed. Imported
+or locally redefined macro names are skipped conservatively. Qualified and
+cross-file calls, additional binding forms, and broader macro support are
+tracked in [issue #1](https://github.com/meymchen/lspf-analysis/issues/1).
 
 ### What is deliberately left out
 

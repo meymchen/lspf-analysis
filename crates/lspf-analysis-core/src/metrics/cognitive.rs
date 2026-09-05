@@ -7,14 +7,40 @@ use std::fmt;
 use crate::checker::Checker;
 use crate::*;
 
-// TODO: Find a way to increment the cognitive complexity value
-// for recursive code. For some kind of languages, such as C++, it is pretty
-// hard to detect, just parsing the code, if a determined function is recursive
-// because the call graph of a function is solved at runtime.
-// So a possible solution could be searching for a crate which implements
-// a light language interpreter, computing the call graph, and then detecting
-// if there are cycles. At this point, it is possible to figure out if a
-// function is recursive or not.
+mod recursion;
+mod rust_macros;
+
+/// Additional context for metrics that cannot be derived from a single AST node.
+pub(crate) struct FileContext {
+    recursive: std::collections::HashSet<usize>,
+    macros: Option<rust_macros::Macros>,
+}
+
+impl FileContext {
+    pub(crate) fn new(root: Node, code: &[u8], language: LANG) -> Self {
+        Self {
+            recursive: recursion::functions(root, code, language),
+            macros: matches!(language, LANG::Rust).then(|| rust_macros::Macros::new(root, code)),
+        }
+    }
+
+    pub(crate) fn compute(
+        &self,
+        node: Node,
+        code: &[u8],
+        stats: &mut Stats,
+        nesting_map: &HashMap<usize, (usize, usize, usize)>,
+    ) {
+        if self.recursive.contains(&node.id()) {
+            increment_by_one(stats);
+        }
+        if node.kind() == "macro_invocation"
+            && let Some(macros) = &self.macros
+        {
+            macros.compute(node, code, stats, nesting_map[&node.id()]);
+        }
+    }
+}
 
 /// The `Cognitive Complexity` metric.
 #[derive(Debug, Clone)]
@@ -310,7 +336,6 @@ impl Cognitive for RustCode {
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
         use Rust::*;
-        //TODO: Implement macros
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
         match node.kind_id().into() {
