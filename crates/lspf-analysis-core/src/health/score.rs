@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::config::HealthConfig;
+use super::config::{HealthConfig, PILLARS};
 use crate::spaces::{FuncSpace, SpaceKind};
 
 /// The qualitative band a quality score falls in, from poor to excellent.
@@ -51,34 +51,100 @@ impl std::fmt::Display for Grade {
     }
 }
 
-/// The raw value and 0-100 score of each pillar.
-#[derive(Clone, Copy, Debug, Serialize)]
+/// One metric, as measured and as scored.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+pub struct Measure {
+    /// What the metric is called in a report.
+    pub name: &'static str,
+    /// The raw value the engine computed.
+    pub value: f64,
+    /// What that value scores, from 0 to 100.
+    pub score: f64,
+}
+
+/// One pillar of the quality score, and the metrics behind it.
+///
+/// A pillar takes the **worst** of its measures rather than their average.
+/// Two metrics of the same property are partly redundant — cognitive and
+/// cyclomatic complexity both describe control flow — so averaging them
+/// would let a function hide a bad number behind a good one, while adding
+/// them as separate pillars would count the same property twice.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct Pillar {
+    /// What the pillar is called in a report.
+    pub name: &'static str,
+    /// The worst of `measures`, from 0 to 100.
+    pub score: f64,
+    /// What was measured, in the order the pillar defines them.
+    pub measures: Vec<Measure>,
+}
+
+impl Pillar {
+    /// Builds a pillar from its measures, scoring it at the worst of them.
+    ///
+    /// A pillar with no measures scores 100: nothing was found to hold
+    /// against the function, which is different from finding a problem.
+    fn of(name: &'static str, measures: Vec<Measure>) -> Self {
+        let score = measures
+            .iter()
+            .map(|measure| measure.score)
+            .fold(100.0_f64, f64::min);
+        Self {
+            name,
+            score,
+            measures,
+        }
+    }
+
+    /// Returns the measure that set this pillar's score.
+    pub fn worst_measure(&self) -> Option<&Measure> {
+        self.measures
+            .iter()
+            .min_by(|a, b| a.score.total_cmp(&b.score))
+    }
+}
+
+/// Every pillar behind one function's quality score.
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Scores {
-    /// Cognitive complexity, and what it scores.
-    pub complexity: f64,
-    pub complexity_score: f64,
-    /// Statements in the function, and what they score.
-    pub length: f64,
-    pub length_score: f64,
-    /// Names held at the busiest statement, and what they score.
-    pub working_memory: f64,
-    pub working_memory_score: f64,
+    /// How tangled the control flow is.
+    pub control_flow: Pillar,
+    /// How much the function does.
+    pub size: Pillar,
+    /// How many names have to be held at once.
+    pub vocabulary: Pillar,
+    /// How wide the signature is.
+    pub interface: Pillar,
 }
 
 impl Scores {
-    /// Returns the pillar with the lowest score, as `(name, score)`.
+    /// Returns the pillars in the order the weights are given in.
+    pub fn pillars(&self) -> [&Pillar; PILLARS] {
+        [
+            &self.control_flow,
+            &self.size,
+            &self.vocabulary,
+            &self.interface,
+        ]
+    }
+
+    /// Returns the function's size in statements.
     ///
-    /// Ties break toward complexity, then length: when two pillars are
-    /// equally bad, the message names the one a reader feels first.
-    pub fn worst_pillar(&self) -> (&'static str, f64) {
-        let mut worst = ("complexity", self.complexity_score);
-        if self.length_score < worst.1 {
-            worst = ("method length", self.length_score);
-        }
-        if self.working_memory_score < worst.1 {
-            worst = ("working memory", self.working_memory_score);
-        }
-        worst
+    /// This is the one measure read outside its own pillar: a file's
+    /// quality weights each function by how much of the file it is.
+    pub fn statements(&self) -> f64 {
+        self.size.measures.first().map_or(0.0, |m| m.value)
+    }
+
+    /// Returns the lowest-scoring pillar.
+    ///
+    /// Ties break toward the earlier pillar: when two are equally bad, the
+    /// message names the one a reader feels first.
+    pub fn worst_pillar(&self) -> &Pillar {
+        self.pillars()
+            .into_iter()
+            .min_by(|a, b| a.score.total_cmp(&b.score))
+            .expect("there is always at least one pillar")
     }
 }
 
@@ -180,28 +246,96 @@ fn pillar_score(raw: f64, threshold: f64) -> f64 {
     100.0 / (1.0 + ratio * ratio)
 }
 
-/// Blends the three pillar scores into a quality percentage.
+/// Blends the pillar scores into a quality percentage.
+///
+/// The geometric mean means one collapsed pillar pulls the whole score
+/// down, which an arithmetic mean would let the others hide.
 fn blend(scores: &Scores, config: &HealthConfig) -> f64 {
-    let (wc, wl, ww) = config.weights.normalized();
-    scores.complexity_score.powf(wc) * scores.length_score.powf(wl)
-        // The geometric mean means one collapsed pillar pulls the whole
-        // score down, which an arithmetic mean would let the others hide.
-        * scores.working_memory_score.powf(ww)
+    let weights = config.weights.normalized();
+    scores
+        .pillars()
+        .iter()
+        .zip(weights)
+        .map(|(pillar, weight)| pillar.score.powf(weight))
+        .product()
+}
+
+/// Replaces a non-finite measurement with zero.
+///
+/// Halstead difficulty divides by the number of distinct operands, so a
+/// function that uses none — an empty body, a bare `pass` — yields NaN.
+/// Nothing was measured there, which scores as nothing held against it.
+fn finite(value: f64) -> f64 {
+    if value.is_finite() { value } else { 0.0 }
+}
+
+/// Measures `value` against `threshold` under `name`.
+fn measure(name: &'static str, value: f64, threshold: f64) -> Measure {
+    Measure {
+        name,
+        value,
+        score: pillar_score(value, threshold),
+    }
 }
 
 /// Scores one function space.
+///
+/// Which metrics feed which pillar, and why the rest of what the engine
+/// computes is deliberately left out, is set out in the
+/// [module docs](crate::health).
 fn function_health(space: &FuncSpace, config: &HealthConfig) -> FunctionHealth {
-    let complexity = space.metrics.cognitive.cognitive();
-    let length = space.metrics.loc.lloc();
-    let working_memory = space.metrics.working_memory.wm();
+    let metrics = &space.metrics;
+    // A closure's parameters are counted separately from a named
+    // function's; a space is one or the other, so the larger is its own.
+    let parameters = metrics.nargs.fn_args().max(metrics.nargs.closure_args());
 
     let scores = Scores {
-        complexity,
-        complexity_score: pillar_score(complexity, config.complexity_threshold),
-        length,
-        length_score: pillar_score(length, config.length_threshold),
-        working_memory,
-        working_memory_score: pillar_score(working_memory, config.working_memory_threshold),
+        control_flow: Pillar::of(
+            "control flow",
+            vec![
+                measure(
+                    "cognitive complexity",
+                    metrics.cognitive.cognitive(),
+                    config.complexity_threshold,
+                ),
+                measure(
+                    "cyclomatic complexity",
+                    metrics.cyclomatic.cyclomatic(),
+                    config.cyclomatic_threshold,
+                ),
+            ],
+        ),
+        size: Pillar::of(
+            "size",
+            vec![measure(
+                "statements",
+                metrics.loc.lloc(),
+                config.length_threshold,
+            )],
+        ),
+        vocabulary: Pillar::of(
+            "vocabulary load",
+            vec![
+                measure(
+                    "working memory",
+                    metrics.working_memory.wm(),
+                    config.working_memory_threshold,
+                ),
+                measure(
+                    "Halstead difficulty",
+                    finite(metrics.halstead.difficulty()),
+                    config.halstead_difficulty_threshold,
+                ),
+            ],
+        ),
+        interface: Pillar::of(
+            "interface",
+            vec![measure(
+                "parameters",
+                parameters,
+                config.parameters_threshold,
+            )],
+        ),
     };
     let quality = blend(&scores, config);
 
@@ -233,11 +367,11 @@ fn collect_functions(space: &FuncSpace, config: &HealthConfig, out: &mut Vec<Fun
 fn weighted_quality<'a>(functions: impl Iterator<Item = &'a FunctionHealth> + Clone) -> f64 {
     let total_weight: f64 = functions
         .clone()
-        .map(|function| function.scores.length.max(0.0))
+        .map(|function| function.scores.statements().max(0.0))
         .sum();
     if total_weight > 0.0 {
         functions
-            .map(|function| function.quality * function.scores.length.max(0.0))
+            .map(|function| function.quality * function.scores.statements().max(0.0))
             .sum::<f64>()
             / total_weight
     } else {
@@ -347,33 +481,39 @@ mod tests {
         assert_eq!(pillar_score(42.0, -1.0), 100.0);
     }
 
+    /// Builds scores with the four pillars set to the given values.
+    fn scored(control_flow: f64, size: f64, vocabulary: f64, interface: f64) -> Scores {
+        let pillar = |name, score| Pillar {
+            name,
+            score,
+            measures: Vec::new(),
+        };
+        Scores {
+            control_flow: pillar("control flow", control_flow),
+            size: pillar("size", size),
+            vocabulary: pillar("vocabulary load", vocabulary),
+            interface: pillar("interface", interface),
+        }
+    }
+
+    /// Scores with every pillar at `score` and a size of `statements`.
+    fn sized(score: f64, statements: f64) -> Scores {
+        let mut scores = scored(score, score, score, score);
+        scores.size.measures = vec![measure("statements", statements, 30.0)];
+        scores
+    }
+
     #[test]
     fn equal_pillars_blend_to_their_common_value() {
-        let scores = Scores {
-            complexity: 0.0,
-            complexity_score: 40.0,
-            length: 0.0,
-            length_score: 40.0,
-            working_memory: 0.0,
-            working_memory_score: 40.0,
-        };
-        let quality = blend(&scores, &HealthConfig::default());
+        let quality = blend(&scored(40.0, 40.0, 40.0, 40.0), &HealthConfig::default());
         assert!((quality - 40.0).abs() < 1e-9, "got {quality}");
     }
 
     #[test]
     fn one_collapsed_pillar_drags_the_blend_below_the_arithmetic_mean() {
-        let scores = Scores {
-            complexity: 0.0,
-            complexity_score: 1.0,
-            length: 0.0,
-            length_score: 100.0,
-            working_memory: 0.0,
-            working_memory_score: 100.0,
-        };
-        let quality = blend(&scores, &HealthConfig::default());
+        let quality = blend(&scored(1.0, 100.0, 100.0, 100.0), &HealthConfig::default());
         assert!(
-            quality < 67.0,
+            quality < 75.0,
             "geometric mean should punish, got {quality}"
         );
         assert!(quality > 0.0);
@@ -381,14 +521,7 @@ mod tests {
 
     #[test]
     fn weights_shift_the_blend_toward_the_weighted_pillar() {
-        let scores = Scores {
-            complexity: 0.0,
-            complexity_score: 10.0,
-            length: 0.0,
-            length_score: 100.0,
-            working_memory: 0.0,
-            working_memory_score: 100.0,
-        };
+        let scores = scored(10.0, 100.0, 100.0, 100.0);
         let balanced = blend(&scores, &HealthConfig::default());
         let complexity_heavy = blend(
             &scores,
@@ -397,11 +530,23 @@ mod tests {
                     complexity: 8.0,
                     length: 1.0,
                     working_memory: 1.0,
+                    interface: 0.5,
                 },
                 ..HealthConfig::default()
             },
         );
         assert!(complexity_heavy < balanced);
+    }
+
+    #[test]
+    fn the_interface_pillar_counts_for_half_of_another() {
+        let config = HealthConfig::default();
+        let bad_interface = blend(&scored(100.0, 100.0, 100.0, 10.0), &config);
+        let bad_size = blend(&scored(100.0, 10.0, 100.0, 100.0), &config);
+        assert!(
+            bad_interface > bad_size,
+            "a wide signature should cost less than a long body: {bad_interface} vs {bad_size}"
+        );
     }
 
     #[test]
@@ -485,14 +630,7 @@ mod tests {
                 end_line: 100,
                 quality: 10.0,
                 grade: Grade::Poor,
-                scores: Scores {
-                    complexity: 0.0,
-                    complexity_score: 10.0,
-                    length: 99.0,
-                    length_score: 10.0,
-                    working_memory: 0.0,
-                    working_memory_score: 10.0,
-                },
+                scores: sized(10.0, 99.0),
             },
             FunctionHealth {
                 name: Some("good".into()),
@@ -500,14 +638,7 @@ mod tests {
                 end_line: 102,
                 quality: 100.0,
                 grade: Grade::Excellent,
-                scores: Scores {
-                    complexity: 0.0,
-                    complexity_score: 100.0,
-                    length: 1.0,
-                    length_score: 100.0,
-                    working_memory: 0.0,
-                    working_memory_score: 100.0,
-                },
+                scores: sized(100.0, 1.0),
             },
         ];
         let quality = weighted_quality(functions.iter());
@@ -607,14 +738,74 @@ fn hard(a: u32) -> u32 {
 
     #[test]
     fn worst_pillar_names_the_lowest_score() {
-        let scores = Scores {
-            complexity: 0.0,
-            complexity_score: 90.0,
-            length: 0.0,
-            length_score: 80.0,
-            working_memory: 0.0,
-            working_memory_score: 12.0,
-        };
-        assert_eq!(scores.worst_pillar().0, "working memory");
+        let scores = scored(90.0, 80.0, 12.0, 100.0);
+        assert_eq!(scores.worst_pillar().name, "vocabulary load");
+        assert_eq!(
+            scored(90.0, 80.0, 70.0, 12.0).worst_pillar().name,
+            "interface"
+        );
+    }
+
+    #[test]
+    fn a_pillar_scores_at_its_worst_measure_and_names_it() {
+        let pillar = Pillar::of(
+            "control flow",
+            vec![
+                measure("cognitive complexity", 1.0, 15.0),
+                measure("cyclomatic complexity", 40.0, 10.0),
+            ],
+        );
+        assert!(pillar.score < 10.0, "got {}", pillar.score);
+        assert_eq!(
+            pillar.worst_measure().unwrap().name,
+            "cyclomatic complexity"
+        );
+    }
+
+    #[test]
+    fn a_pillar_with_nothing_to_measure_is_not_held_against_a_function() {
+        assert_eq!(Pillar::of("interface", Vec::new()).score, 100.0);
+    }
+
+    #[test]
+    fn a_non_finite_measurement_counts_as_nothing_measured() {
+        // Halstead difficulty over a body with no operands.
+        assert_eq!(finite(f64::NAN), 0.0);
+        assert_eq!(finite(f64::INFINITY), 0.0);
+        assert_eq!(
+            measure("Halstead difficulty", finite(f64::NAN), 12.0).score,
+            100.0
+        );
+    }
+
+    #[test]
+    fn cyclomatic_complexity_can_set_the_control_flow_score_alone() {
+        // A flat `match` with many arms: cognitive complexity stays low
+        // while cyclomatic complexity climbs.
+        let mut source = String::from("fn dispatch(value: u32) -> u32 {\n    match value {\n");
+        for index in 0..30 {
+            source.push_str(&format!("        {index} => {index},\n"));
+        }
+        source.push_str("        _ => 0,\n    }\n}\n");
+        let report = health(&LANG::Rust, &source, "a.rs");
+        let function = &report.functions[0];
+        let worst = function.scores.control_flow.worst_measure().unwrap();
+        assert_eq!(worst.name, "cyclomatic complexity", "{:?}", function.scores);
+    }
+
+    #[test]
+    fn a_wide_signature_is_reported_on_the_interface_pillar() {
+        let report = health(
+            &LANG::Rust,
+            "fn wide(a: u32, b: u32, c: u32, d: u32, e: u32, f: u32) -> u32 {\n    a\n}\n",
+            "a.rs",
+        );
+        let function = &report.functions[0];
+        assert_eq!(function.scores.interface.measures[0].value, 6.0);
+        assert!(
+            function.scores.interface.score < 50.0,
+            "six parameters should score below the four-parameter threshold, got {}",
+            function.scores.interface.score
+        );
     }
 }

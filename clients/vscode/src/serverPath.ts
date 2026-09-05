@@ -1,0 +1,90 @@
+import * as os from 'node:os';
+import * as path from 'node:path';
+
+/** Where the binary came from, which decides what to say when it is missing. */
+export type ServerSource = 'configured' | 'development' | 'bundled';
+
+export interface ResolvedServer {
+    binary: string;
+    source: ServerSource;
+}
+
+/** The server binary's name, which only Windows spells differently. */
+export function executableName(platform: NodeJS.Platform): string {
+    return platform === 'win32' ? 'lspf-analysis.exe' : 'lspf-analysis';
+}
+
+export interface ServerLocation {
+    extensionPath: string;
+    /** True when running out of an Extension Development Host. */
+    development: boolean;
+    /** What `lspfAnalysis.server.path` is set to, if anything. */
+    configuredPath?: string;
+    platform?: NodeJS.Platform;
+    homeDirectory?: string;
+}
+
+/**
+ * Decides which binary to launch, most specific source first.
+ *
+ * A configured path always wins, since someone who set it means it. Failing
+ * that, a development host runs the debug build from the workspace — the
+ * extension lives two levels below the repository root — and an installed
+ * extension runs the one packaged beside it.
+ */
+export function resolveServerBinary({
+    extensionPath,
+    development,
+    configuredPath,
+    platform = process.platform,
+    homeDirectory = os.homedir(),
+}: ServerLocation): ResolvedServer {
+    const configured = configuredPath?.trim();
+    if (configured) {
+        return {
+            binary: path.resolve(expandHome(configured, homeDirectory)),
+            source: 'configured',
+        };
+    }
+    const executable = executableName(platform);
+    return development
+        ? {
+              binary: path.resolve(extensionPath, '..', '..', 'target', 'debug', executable),
+              source: 'development',
+          }
+        : { binary: path.join(extensionPath, 'server', executable), source: 'bundled' };
+}
+
+/** Expands a leading `~`, which a hand-written setting is likely to contain. */
+export function expandHome(candidate: string, homeDirectory: string): string {
+    if (candidate === '~') {
+        return homeDirectory;
+    }
+    if (candidate.startsWith('~/') || candidate.startsWith('~\\')) {
+        return path.join(homeDirectory, candidate.slice(2));
+    }
+    return candidate;
+}
+
+/**
+ * Explains a binary that is not there.
+ *
+ * For a packaged extension the likely cause is a VSIX built for another
+ * architecture, which VS Code installs without complaint when it is handed
+ * the file directly; saying so is more useful than reporting a bare path.
+ */
+export function describeMissingServer({ binary, source }: ResolvedServer): string {
+    const found = `LSPF Analysis could not find its language server at ${binary}.`;
+    switch (source) {
+        case 'configured':
+            return `${found} Check the lspfAnalysis.server.path setting.`;
+        case 'development':
+            return `${found} Run cargo build in the repository first.`;
+        case 'bundled':
+            return (
+                `${found} This usually means the installed extension was built for a ` +
+                'different platform. Install the build matching this machine, or point ' +
+                'lspfAnalysis.server.path at an lspf-analysis binary.'
+            );
+    }
+}

@@ -1,43 +1,76 @@
 //! Rendering a function's health for hover.
 
+use lspf::PositionEncoding;
+use lspf::types::{Position, Range};
 use lspf_analysis_core::health::{FileHealth, FunctionHealth, Grade};
 
-/// Finds the function whose span covers a 1-based line.
+use crate::document::name_range;
+
+/// Finds the function whose declared name is under `position`.
 ///
-/// Functions nest, so the innermost match wins: hovering inside a closure
-/// should describe the closure, not the function containing it.
-pub fn function_at(report: &FileHealth, line: usize) -> Option<&FunctionHealth> {
-    report
-        .functions
-        .iter()
-        .filter(|function| function.start_line <= line && line <= function.end_line)
-        .max_by_key(|function| function.start_line)
+/// These metrics supplement whatever else the editor knows about the symbol,
+/// so they are offered only on the name itself. Answering for every line of
+/// a function would put a table in front of the reader whenever they asked
+/// about a local variable, which is not what they asked.
+///
+/// Functions can nest on one line, so the tightest span wins.
+pub fn function_at<'a>(
+    report: &'a FileHealth,
+    text: &str,
+    position: Position,
+    encoding: PositionEncoding,
+) -> Option<(&'a FunctionHealth, Range)> {
+    let line = position.line as usize + 1;
+    let mut found: Option<(&FunctionHealth, Range)> = None;
+    for function in report.functions.iter().filter(|f| f.start_line == line) {
+        let Some(name) = function.name.as_deref() else {
+            continue;
+        };
+        let Some(range) = name_range(text, line, name, encoding) else {
+            continue;
+        };
+        if position.character < range.start.character || position.character >= range.end.character {
+            continue;
+        }
+        let tighter = found
+            .as_ref()
+            .is_none_or(|(current, _)| function.end_line < current.end_line);
+        if tighter {
+            found = Some((function, range));
+        }
+    }
+    found
 }
 
-/// Renders a function's four numbers as Markdown.
+/// Renders a function's numbers as Markdown.
+///
+/// One row per metric, grouped under the pillar it scores, so a reader sees
+/// both the verdict and the measurement that produced it. The pillar's own
+/// score is the worst of its rows, which is why it is not repeated.
 pub fn render(function: &FunctionHealth) -> String {
-    let scores = &function.scores;
-    format!(
+    let mut out = format!(
         "**`{name}`** — quality **{quality:.0}%** ({grade})\n\
          \n\
-         | metric | value | score |\n\
-         | --- | ---: | ---: |\n\
-         | complexity | {complexity:.0} | {complexity_score:.0}% ({complexity_grade}) |\n\
-         | method length | {length:.0} | {length_score:.0}% ({length_grade}) |\n\
-         | working memory | {memory:.0} | {memory_score:.0}% ({memory_grade}) |\n",
+         | pillar | metric | value | score |\n\
+         | --- | --- | ---: | ---: |\n",
         name = function.display_name(),
         quality = function.quality,
         grade = function.grade,
-        complexity = scores.complexity,
-        complexity_score = scores.complexity_score,
-        complexity_grade = Grade::of(scores.complexity_score),
-        length = scores.length,
-        length_score = scores.length_score,
-        length_grade = Grade::of(scores.length_score),
-        memory = scores.working_memory,
-        memory_score = scores.working_memory_score,
-        memory_grade = Grade::of(scores.working_memory_score),
-    )
+    );
+    for pillar in function.scores.pillars() {
+        for (index, metric) in pillar.measures.iter().enumerate() {
+            out.push_str(&format!(
+                "| {label} | {metric} | {value:.0} | {score:.0}% ({grade}) |\n",
+                // The pillar is named once, on the row of its first metric.
+                label = if index == 0 { pillar.name } else { "" },
+                metric = metric.name,
+                value = metric.value,
+                score = metric.score,
+                grade = Grade::of(metric.score),
+            ));
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -68,34 +101,96 @@ fn other() -> u32 {
         .unwrap()
     }
 
-    #[test]
-    fn a_line_outside_every_function_matches_nothing() {
-        assert!(function_at(&report(), 5).is_none());
+    /// Looks up a 1-based line and 0-based column, as an editor would.
+    fn at(report: &FileHealth, line: u32, character: u32) -> Option<&FunctionHealth> {
+        function_at(
+            report,
+            SOURCE,
+            Position::new(line - 1, character),
+            PositionEncoding::Utf16,
+        )
+        .map(|(function, _)| function)
     }
 
     #[test]
-    fn the_signature_line_matches_its_function() {
+    fn the_name_matches_its_function() {
         let report = report();
-        assert_eq!(function_at(&report, 1).unwrap().display_name(), "outer");
-        assert_eq!(function_at(&report, 6).unwrap().display_name(), "other");
+        // `fn outer(...)`: the name starts at column 3.
+        assert_eq!(at(&report, 1, 3).unwrap().display_name(), "outer");
+        assert_eq!(at(&report, 1, 7).unwrap().display_name(), "outer");
+        assert_eq!(at(&report, 6, 3).unwrap().display_name(), "other");
     }
 
     #[test]
-    fn the_innermost_function_wins() {
+    fn the_rest_of_the_signature_matches_nothing() {
         let report = report();
-        // Line 2 is inside `outer` and is also the closure's own span.
-        let found = function_at(&report, 2).unwrap();
-        assert!(found.start_line >= 2, "expected the closure, got {found:?}");
+        assert!(at(&report, 1, 0).is_none(), "the `fn` keyword");
+        assert!(at(&report, 1, 8).is_none(), "the opening parenthesis");
+        assert!(at(&report, 1, 10).is_none(), "the parameter");
     }
 
     #[test]
-    fn rendering_names_all_four_numbers() {
+    fn a_line_inside_a_function_matches_nothing() {
         let report = report();
-        let markdown = render(function_at(&report, 1).unwrap());
-        assert!(markdown.contains("quality"));
-        assert!(markdown.contains("complexity"));
-        assert!(markdown.contains("method length"));
-        assert!(markdown.contains("working memory"));
-        assert!(markdown.contains("outer"));
+        // Hovering a local must leave the editor's own hover alone.
+        assert!(at(&report, 3, 4).is_none());
+        assert!(at(&report, 5, 0).is_none());
+    }
+
+    #[test]
+    fn an_anonymous_function_has_no_name_to_hover() {
+        let report = report();
+        // Line 2 is the closure's span, but a closure has no name of its own.
+        assert!(at(&report, 2, 8).is_none());
+    }
+
+    #[test]
+    fn the_range_covers_exactly_the_name() {
+        let report = report();
+        let (_, range) = function_at(
+            &report,
+            SOURCE,
+            Position::new(0, 4),
+            PositionEncoding::Utf16,
+        )
+        .unwrap();
+        assert_eq!(range.start, Position::new(0, 3));
+        assert_eq!(range.end, Position::new(0, 8));
+    }
+
+    #[test]
+    fn rendering_names_every_pillar_and_metric() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap());
+        for expected in [
+            "outer",
+            "quality",
+            "control flow",
+            "cognitive complexity",
+            "cyclomatic complexity",
+            "size",
+            "statements",
+            "vocabulary load",
+            "working memory",
+            "Halstead difficulty",
+            "interface",
+            "parameters",
+        ] {
+            assert!(
+                markdown.contains(expected),
+                "{expected} missing:\n{markdown}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_pillar_is_named_once_however_many_metrics_it_has() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap());
+        assert_eq!(
+            markdown.matches("| control flow |").count(),
+            1,
+            "the second row of a pillar leaves its label empty:\n{markdown}"
+        );
     }
 }

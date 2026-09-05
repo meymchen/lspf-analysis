@@ -15,6 +15,7 @@ use lspf::types::{
 };
 use lspf::{MemoryFileProvider, RawMessage, RequestId};
 use lspf_analysis::config::Settings;
+use lspf_analysis::status::FileHealthParams;
 
 const SIMPLE: &str = "fn add(a: u32, b: u32) -> u32 {\n    a + b\n}\n";
 
@@ -55,16 +56,33 @@ fn request(id: i32, method: &'static str, params: &impl serde::Serialize) -> Raw
     }
 }
 
+/// Waits for the next notification named `wanted`, skipping the others.
+///
+/// Every analysis publishes diagnostics and a file summary, and a test that
+/// cares about one of them should not have to care which arrives first.
+async fn next_notification(journey: &mut ServerJourney, wanted: &str) -> Bytes {
+    loop {
+        let message = tokio::time::timeout(Duration::from_secs(5), journey.peer().recv())
+            .await
+            .unwrap_or_else(|_| panic!("the server sends {wanted}"))
+            .expect("the testing Transport stays open");
+        let RawMessage::Notification { method, params } = message else {
+            panic!("expected a notification, got {message:?}");
+        };
+        if method == wanted {
+            return params;
+        }
+    }
+}
+
 async fn diagnostics(journey: &mut ServerJourney) -> PublishDiagnosticsParams {
-    let message = tokio::time::timeout(Duration::from_secs(5), journey.peer().recv())
-        .await
-        .expect("the server publishes diagnostics")
-        .expect("the testing Transport stays open");
-    let RawMessage::Notification { method, params } = message else {
-        panic!("expected diagnostics notification, got {message:?}");
-    };
-    assert_eq!(method, "textDocument/publishDiagnostics");
+    let params = next_notification(journey, "textDocument/publishDiagnostics").await;
     serde_json::from_slice(&params).expect("diagnostics params decode")
+}
+
+async fn file_health(journey: &mut ServerJourney) -> FileHealthParams {
+    let params = next_notification(journey, "lspfAnalysis/fileHealth").await;
+    serde_json::from_slice(&params).expect("file health params decode")
 }
 
 fn uri() -> Uri {
@@ -250,7 +268,7 @@ async fn raising_the_threshold_republishes_open_documents() {
 }
 
 #[tokio::test]
-async fn hover_reports_the_four_numbers() {
+async fn hover_reports_every_pillar() {
     let uri = uri();
     let mut journey = start().await;
     journey.peer().send(open(&uri, SIMPLE)).unwrap();
@@ -287,15 +305,88 @@ async fn hover_reports_the_four_numbers() {
     for expected in [
         "add",
         "quality",
-        "complexity",
-        "method length",
+        "control flow",
+        "cognitive complexity",
+        "cyclomatic complexity",
+        "size",
+        "statements",
+        "vocabulary load",
         "working memory",
+        "Halstead difficulty",
+        "interface",
+        "parameters",
     ] {
         assert!(
             markdown.contains(expected),
             "{expected} missing: {markdown}"
         );
     }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn hover_off_the_name_leaves_the_editor_alone() {
+    // Metrics supplement the editor's own hover, so they must not answer for
+    // a parameter or a line inside the body.
+    let uri = uri();
+    let mut journey = start().await;
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    assert!(diagnostics(&mut journey).await.diagnostics.is_empty());
+
+    for (id, position, what) in [
+        (20, Position::new(0, 0), "the `fn` keyword"),
+        (21, Position::new(0, 7), "a parameter"),
+        (22, Position::new(1, 4), "the body"),
+    ] {
+        journey
+            .peer()
+            .send(request(
+                id,
+                "textDocument/hover",
+                &HoverParams {
+                    text_document_position_params: TextDocumentPositionParams {
+                        text_document: TextDocumentIdentifier { uri: uri.clone() },
+                        position,
+                    },
+                    work_done_progress_params: WorkDoneProgressParams::default(),
+                },
+            ))
+            .unwrap();
+
+        let response = journey.peer().recv().await.unwrap();
+        let RawMessage::Response {
+            result: Ok(result), ..
+        } = response
+        else {
+            panic!("expected a successful hover response, got {response:?}");
+        };
+        let value: serde_json::Value = serde_json::from_slice(&result).unwrap();
+        assert!(value.is_null(), "{what} answered with {value}");
+    }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn every_analysis_reports_the_file_total() {
+    let uri = uri();
+    let mut journey = start().await;
+    journey.peer().send(open(&uri, &tangled())).unwrap();
+
+    let health = file_health(&mut journey).await;
+    assert_eq!(health.uri, uri);
+    assert_eq!(health.functions, 1);
+    assert_eq!(health.below, 1, "the one function is below the threshold");
+    assert_eq!(health.grade, "poor");
+    let worst = health
+        .worst
+        .expect("a file with a function has a worst one");
+    assert_eq!(worst.name, "tangled");
+    assert_eq!(worst.line, 1);
+
+    // The summary travels alongside the diagnostics, not instead of them.
+    assert_eq!(diagnostics(&mut journey).await.diagnostics.len(), 1);
 
     journey.finish().await.unwrap();
 }

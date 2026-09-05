@@ -86,6 +86,7 @@ pub struct CodeMetrics {
     /// `Mi` data
     pub mi: mi::Stats,
     /// `Abc` data
+    #[serde(skip_serializing_if = "abc::Stats::is_disabled")]
     pub abc: abc::Stats,
     /// `Wmc` data
     #[serde(skip_serializing_if = "wmc::Stats::is_disabled")]

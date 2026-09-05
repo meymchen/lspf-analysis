@@ -9,6 +9,11 @@ readme = "../../README.md"
 keywords = ["metrics", "code-quality"]
 description = "Code metrics and health scoring engine behind the lspf-analysis language server"
 
+# The health module documents its formulas in LaTeX; rustdoc has no maths of
+# its own, so KaTeX is injected to render them.
+[package.metadata.docs.rs]
+rustdoc-args = ["--html-in-header", "katex.html"]
+
 [dependencies]
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset.workspace = true

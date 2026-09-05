@@ -1,3 +1,15 @@
 target
 enums/target
 *~
+
+# What insta writes beside a snapshot when an assertion fails. The `.snap`
+# files themselves are the test baseline and belong in the repository.
+*.snap.new
+
+# The VS Code client: dependencies, build output, and the server binary that
+# `npm run package` copies in.
+clients/vscode/node_modules/
+clients/vscode/dist/
+clients/vscode/out/
+clients/vscode/server/
+*.vsix

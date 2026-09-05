@@ -35,6 +35,14 @@ pub struct Stats {
     conditions_min: f64,
     conditions_max: f64,
     space_count: usize,
+    /// Whether a language actually counted anything into this.
+    ///
+    /// No language implements [`Abc`] today — the metric came from upstream
+    /// with the Java and C++ grammars, which this fork does not carry — so
+    /// without this flag every report would carry a full set of zeros that
+    /// looks computed. [`Wmc`](crate::wmc), [`Npm`](crate::npm) and
+    /// [`Npa`](crate::npa) hide themselves the same way.
+    computed: bool,
 }
 
 impl Default for Stats {
@@ -53,6 +61,7 @@ impl Default for Stats {
             conditions_min: f64::MAX,
             conditions_max: 0.,
             space_count: 1,
+            computed: false,
         }
     }
 }
@@ -122,6 +131,26 @@ impl Stats {
         self.conditions_sum += other.conditions_sum;
 
         self.space_count += other.space_count;
+        self.computed |= other.computed;
+    }
+
+    /// Marks the metric as one this language really counts.
+    ///
+    /// An implementation of [`Abc`] must call this, or its results stay
+    /// hidden. See the `computed` field.
+    #[inline(always)]
+    #[expect(
+        dead_code,
+        reason = "the seam a real Abc implementation calls; no language has one yet"
+    )]
+    pub(crate) fn enable(&mut self) {
+        self.computed = true;
+    }
+
+    /// Checks if the `Abc` metric is disabled.
+    #[inline(always)]
+    pub(crate) fn is_disabled(&self) -> bool {
+        !self.computed
     }
 
     /// Returns the `Abc` assignments metric value.
@@ -242,6 +271,10 @@ pub trait Abc
 where
     Self: Checker,
 {
+    /// Counts assignments, branches and conditions into `stats`.
+    ///
+    /// An implementation must call `Stats::enable`, or what it counts is
+    /// treated as never having been computed and stays out of the report.
     fn compute(node: &Node, stats: &mut Stats);
 }
 

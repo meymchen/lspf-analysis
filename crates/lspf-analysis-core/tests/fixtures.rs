@@ -42,7 +42,9 @@ fn assert_fixture(name: &str) {
         ".health.quality" => insta::rounded_redaction(3),
         ".health.maintainability_index" => insta::rounded_redaction(3),
         ".health.functions[].quality" => insta::rounded_redaction(3),
-        ".health.functions[].scores.*" => insta::rounded_redaction(3),
+        ".health.functions[].scores.*.score" => insta::rounded_redaction(3),
+        ".health.functions[].scores.*.measures[].value" => insta::rounded_redaction(3),
+        ".health.functions[].scores.*.measures[].score" => insta::rounded_redaction(3),
         // Paths differ between checkouts.
         ".metrics.name" => "[filepath]",
         ".health.path" => "[filepath]",

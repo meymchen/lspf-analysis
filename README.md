@@ -13,53 +13,169 @@ Supported languages: **JavaScript**, **Python**, **Rust**, **TypeScript**,
 
 ## What it reports
 
-Hovering a function shows four numbers; a function below the quality
-threshold gets a diagnostic on its signature line.
+Hovering a function's name shows its measurements; a function below the
+quality threshold gets a diagnostic on its signature line. The hover answers
+on the name and nowhere else, so it adds to whatever the editor already says
+about a symbol rather than displacing it.
 
-| Metric | What it measures | Where it comes from |
-| --- | --- | --- |
-| **Complexity** | How tangled the control flow is | Cognitive complexity (Campbell) |
-| **Method length** | How much a function does | Logical lines of code, i.e. statements |
-| **Working memory** | Names you have to hold at once | The busiest statement in the function |
-| **Quality** | The three, blended | See below |
+Quality is blended from four pillars. Each pillar takes the **worst** of its
+metrics rather than their average, so a function cannot hide a bad number
+behind a good one, and no property is counted twice.
+
+| Pillar | Metric | Default threshold | Evidence |
+| --- | --- | ---: | --- |
+| **Control flow** | cognitive complexity | 15 | [Campbell 2018][c18], validated against measured understandability by [Muñoz Barón et al. 2020][mb20] |
+| | cyclomatic complexity | 10 | [McCabe 1976][mc76]; not redundant with size at method level, [Landman et al. 2016][la16] |
+| **Size** | statements (logical lines) | 30 | unit size in the SIG model, [Heitlager et al. 2007][hkv07], [SIG/TÜViT][sig] |
+| **Vocabulary load** | names held at once | 8 | [Miller 1956][mi56], [Cowan 2001][co01] |
+| | Halstead difficulty | 12 | vocabulary size is what loads working memory, [Peitek et al. 2021][pe21] |
+| **Interface** | parameters | 4 | unit interfacing in the SIG model; the smell with the highest defect correlation in [Topuz 2022][to22] |
 
 ### The formula
 
-Each pillar is scored on its own first, so a function is never rescued by
-being short if it is impenetrable. A raw value `r >= 0` with threshold
-`t > 0` scores
+Each metric is scored on its own before anything is blended, so a function is
+never rescued by being short if it is impenetrable. A raw value $r \ge 0$
+with threshold $t > 0$ scores
 
-```text
-s(r) = 100 / (1 + (r/t)²)
-```
+$$ s(r) = \frac{100}{1 + \left(\dfrac{r}{t}\right)^{2}} $$
 
-giving `s(0) = 100`, `s(t) = 50`, `s(2t) = 20`, `s(3t) = 10` — smooth,
-monotone, and always in `(0, 100]`.
+giving $s(0) = 100$, $s(t) = 50$, $s(2t) = 20$ and $s(3t) = 10$ — smooth,
+monotone, and always in $(0, 100]$.
 
-The three sub-scores blend into quality as a weighted geometric mean:
+A pillar $P$ scores at its worst metric,
 
-```text
-quality = s_complexity^w₁ · s_length^w₂ · s_working_memory^w₃    (Σw = 1)
-```
+$$ s_P = \min_{m \in P} s(r_m) $$
 
-A geometric mean rather than an arithmetic one, so one collapsed pillar
-drags the whole score down instead of hiding behind the other two.
+and the pillars blend into quality as a weighted geometric mean:
+
+$$ Q = \prod_{P} s_P^{\,w_P}, \qquad \sum_{P} w_P = 1 $$
+
+A geometric mean rather than an arithmetic one, so one collapsed pillar drags
+the whole score down instead of hiding behind the others.
 
 Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25),
 **poor** (<25).
+
+### What is deliberately left out
+
+The engine computes more than the score uses. Each omission is a judgement
+about evidence, not an oversight.
+
+- **Maintainability index** — reported on each file as a familiar second
+  opinion, never scored. Its constants are curve-fitted to one 1990s corpus,
+  it averages away the distribution it summarises, and it is confounded by
+  size ([Heitlager et al. 2007][hkv07], [van Deursen 2014][vd14],
+  [El Emam et al. 2001][ee01], [Sjøberg et al. 2012][sj12]).
+- **Comment density** — the replicated findings concern whether comments are
+  *accurate*, not how many there are ([Rani et al. 2023][ra23]).
+- **Number of exit points** — the single-exit rule is argued in style guides
+  on both sides, but a literature search turns up no controlled study
+  relating exit count to defects or comprehension.
+- **Number of methods, WMC, NPM, NPA** — properties of a class, not of a
+  function. The last three are not computed for any supported language.
+- **ABC** — its `compute` is a no-op for every supported language, so it
+  would contribute a constant zero. It is hidden from reports rather than
+  printed as zeros.
+
+Adding Java, Kotlin or C++ would make the class-level metrics real and worth
+a pillar of their own; until then they would score nothing.
 
 ### Defaults
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `complexityThreshold` | 15 | Cognitive complexity scoring 50% |
+| `cyclomaticThreshold` | 10 | Cyclomatic complexity scoring 50% |
 | `lengthThreshold` | 30 | Statements scoring 50% |
-| `workingMemoryThreshold` | 8 | Names scoring 50% (working memory holds 5–9) |
-| `weights` | 1 / 1 / 1 | Relative pillar weights, normalized before use |
+| `workingMemoryThreshold` | 8 | Names scoring 50% |
+| `halsteadDifficultyThreshold` | 12 | Halstead difficulty scoring 50% |
+| `parametersThreshold` | 4 | Parameters scoring 50% |
+| `weights` | 1 / 1 / 1 / 0.5 | Relative pillar weights, normalized before use |
 | `qualityWarn` | 25 | Below this, a function is reported |
 | `qualityError` | 10 | Below this, it is an error rather than a warning |
 
+The three thresholds that predate the fourth pillar keep their names, so a
+configuration written for the earlier model still means what it meant.
+
+### References
+
+- \[c18\] G. A. Campbell. *Cognitive Complexity: an overview and evaluation.*
+  TechDebt 2018. <https://doi.org/10.1145/3194164.3194186>
+- \[mb20\] M. Muñoz Barón, M. Wyrich, S. Wagner. *An Empirical Validation of
+  Cognitive Complexity as a Measure of Source Code Understandability.* ESEM
+  2020. <https://doi.org/10.1145/3382494.3410636> — see also L. Lavazza et
+  al., JSS 197 (2023), <https://doi.org/10.1016/j.jss.2022.111561>, which is
+  more sceptical that it improves on older measures.
+- \[mc76\] T. J. McCabe. *A Complexity Measure.* IEEE TSE SE-2(4), 1976.
+  <https://doi.org/10.1109/TSE.1976.233837>
+- \[la16\] D. Landman, A. Serebrenik, E. Bouwers, J. J. Vinju. *Empirical
+  analysis of the relationship between CC and SLOC in a large corpus of Java
+  methods and C functions.* JSEP 28(7), 2016.
+  <https://doi.org/10.1002/smr.1760>
+- \[hkv07\] I. Heitlager, T. Kuipers, J. Visser. *A Practical Model for
+  Measuring Maintainability.* QUATIC 2007.
+  <https://doi.org/10.1109/QUATIC.2007.7>
+- \[sig\] SIG/TÜV NORD CERT. *Evaluation Criteria Trusted Product
+  Maintainability.* Thresholds calibrated per T. L. Alves, C. Ypma,
+  J. Visser, *Deriving metric thresholds from benchmark data*, ICSM 2010.
+  <https://doi.org/10.1109/ICSM.2010.5609747>
+- \[mi56\] G. A. Miller. *The magical number seven, plus or minus two.*
+  Psychological Review 63(2), 1956. <https://doi.org/10.1037/h0043158>
+- \[co01\] N. Cowan. *The magical number 4 in short-term memory.* Behavioral
+  and Brain Sciences 24(1), 2001.
+  <https://doi.org/10.1017/S0140525X01003922>
+- \[pe21\] N. Peitek, S. Apel, C. Parnin, A. Brechmann, J. Siegmund. *Program
+  Comprehension and Code Complexity Metrics: An fMRI Study.* ICSE 2021.
+  <https://doi.org/10.1109/ICSE43902.2021.00056>
+- \[to22\] F. N. Topuz. *Empirical Evidence of the Consequences of Bad Smells in
+  Software.* Auburn University, 2022.
+  <https://etd.auburn.edu/handle/10415/8100>
+- \[vd14\] A. van Deursen. *Think Twice Before Using the "Maintainability
+  Index".* 2014.
+  <https://avandeursen.com/2014/08/29/think-twice-before-using-the-maintainability-index/>
+- \[ee01\] K. El Emam, S. Benlarbi, N. Goel, S. N. Rai. *The Confounding Effect
+  of Class Size on the Validity of Object-Oriented Metrics.* IEEE TSE 27(7),
+  2001. <https://doi.org/10.1109/32.935855>
+- \[sj12\] D. I. K. Sjøberg, B. Anda, A. Mockus. *Questioning software
+  maintenance metrics.* ESEM 2012.
+  <https://doi.org/10.1145/2372251.2372269>
+- \[ra23\] P. Rani, A. Blasi, N. Stulova, et al. *A decade of code comment
+  quality assessment: a systematic literature review.* JSS 195, 2023.
+  <https://doi.org/10.1016/j.jss.2022.111515>
+
+[c18]: https://doi.org/10.1145/3194164.3194186
+[mb20]: https://doi.org/10.1145/3382494.3410636
+[mc76]: https://doi.org/10.1109/TSE.1976.233837
+[la16]: https://doi.org/10.1002/smr.1760
+[hkv07]: https://doi.org/10.1109/QUATIC.2007.7
+[sig]: https://doi.org/10.1109/ICSM.2010.5609747
+[mi56]: https://doi.org/10.1037/h0043158
+[co01]: https://doi.org/10.1017/S0140525X01003922
+[pe21]: https://doi.org/10.1109/ICSE43902.2021.00056
+[to22]: https://etd.auburn.edu/handle/10415/8100
+[vd14]: https://avandeursen.com/2014/08/29/think-twice-before-using-the-maintainability-index/
+[ee01]: https://doi.org/10.1109/32.935855
+[sj12]: https://doi.org/10.1145/2372251.2372269
+[ra23]: https://doi.org/10.1016/j.jss.2022.111515
+
 ## Install
+
+### VS Code
+
+[`clients/vscode`](./clients/vscode) is the extension, and it carries the
+server binary, so nothing else has to be installed. Until it is published,
+build the VSIX for your machine:
+
+```console
+npm --prefix clients/vscode ci
+npm --prefix clients/vscode run package
+code --install-extension clients/vscode/lspf-analysis-<platform>-<version>.vsix
+```
+
+`npm run package -- --target darwin-arm64` builds for another platform;
+[the extension's README](./clients/vscode/README.md) lists the supported ones.
+
+### The binary on its own
 
 ```console
 cargo install --path crates/lspf-analysis
@@ -83,21 +199,34 @@ see the connection come up.
 
 ### Editor setup
 
-VS Code has no built-in generic LSP client, so install a thin one such as
-[Generic LSP Client (v2)](https://marketplace.visualstudio.com/items?itemName=zsol.vscode-glspc),
-then add to `settings.json`:
-
-```json
-{
-  "glspc.server.command": "lspf-analysis",
-  "glspc.server.commandArguments": ["serve", "--stdio"],
-  "glspc.server.languageId": ["rust", "python", "javascript", "typescript"]
-}
-```
+In VS Code the extension does this for you. Any other editor launches
+`lspf-analysis serve --stdio` the way it launches any language server, for
+the language ids `rust`, `python`, `javascript`, `javascriptreact`,
+`typescript` and `typescriptreact`.
 
 Open a source file with a long or deeply nested function; the signature line
 should pick up a warning, and hovering the function name should report its
 four numbers.
+
+### The file summary
+
+A file's quality belongs to the whole document, so it has no honest range to
+sit on. Instead, every analysis pushes a `lspfAnalysis/fileHealth`
+notification:
+
+```json
+{
+  "uri": "file:///src/lib.rs",
+  "quality": 63.4,
+  "grade": "good",
+  "functions": 7,
+  "below": 1,
+  "worst": { "name": "tangled", "quality": 22.1, "grade": "poor", "line": 84 }
+}
+```
+
+The VS Code extension puts this in the status bar. A client that does not
+listen for the method ignores it, so nothing else has to change.
 
 ### Configuration
 
@@ -162,6 +291,38 @@ changes, and hover — is covered end to end in
 `crates/lspf-analysis/tests/server_journey.rs`, over lspf's in-memory
 transport.
 
+The health module documents its formulas in LaTeX. rustdoc has no maths of
+its own, so pass the KaTeX header to render them:
+
+```console
+RUSTDOCFLAGS="--html-in-header crates/lspf-analysis-core/katex.html" \
+  cargo doc -p lspf-analysis-core --no-deps --open
+```
+
+docs.rs picks the same header up from `package.metadata.docs.rs`.
+
+The VS Code client has its own tests:
+
+```console
+npm --prefix clients/vscode ci
+npm --prefix clients/vscode test
+```
+
+To run the extension against a debug build, open this repository in VS Code
+and launch "Run language extension" (F5); it resolves the server from
+`target/debug` rather than from a packaged binary.
+
+To debug both halves at once, launch "Debug extension and server" instead.
+It starts the server under [CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb)
+on `serve --tcp 127.0.0.1:9257` and then an Extension Development Host with
+`LSPF_ANALYSIS_DEBUG_TCP=9257`, which makes the extension connect to that
+process rather than spawn one of its own. Breakpoints in `src/` and in the
+Rust sources are both live, from `initialize` onward.
+
+A `--tcp` server serves one client and exits, so reloading the development
+host leaves nothing to connect to; restart the compound rather than the
+window.
+
 ### Updating grammars
 
 Bump the grammar crate versions in `crates/lspf-analysis-core/Cargo.toml` and
@@ -176,6 +337,8 @@ before and after the bump.
   engine and the health scoring layer.
 - [`crates/lspf-analysis`](./crates/lspf-analysis) — the language server and
   its `lspf-analysis` binary.
+- [`clients/vscode`](./clients/vscode) — the VS Code extension, which packages
+  the binary for one platform per VSIX.
 - [`enums`](./enums) — the generator for the tree-sitter node kind bindings.
 
 ## Credits
@@ -191,7 +354,7 @@ remains excellent, and all credit for it belongs to the original authors.
 
 If you use the metrics in academic work, cite their paper:
 
-```
+```bibtex
 @article{ARDITO2020100635,
     title = {rust-code-analysis: A Rust library to analyze and extract maintainability information from source codes},
     journal = {SoftwareX},

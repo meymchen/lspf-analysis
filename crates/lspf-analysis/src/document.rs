@@ -98,22 +98,79 @@ fn percent_decode(input: &str) -> String {
 /// drawn across its signature line: that is where a reader looks to find out
 /// which function is being complained about.
 pub fn line_range(text: &str, line: usize, encoding: PositionEncoding) -> Range {
-    let index = line.saturating_sub(1);
-    let content = text
-        .split_inclusive('\n')
-        .nth(index)
-        .map(|line| line.trim_end_matches(['\n', '\r']))
-        .unwrap_or("");
-    let end = match encoding {
-        PositionEncoding::Utf8 => content.len(),
-        PositionEncoding::Utf16 => content.chars().map(char::len_utf16).sum(),
-        PositionEncoding::Utf32 => content.chars().count(),
-    };
-    let line = u32::try_from(index).unwrap_or(u32::MAX);
+    let content = line_content(text, line).unwrap_or("");
+    let line = u32::try_from(line.saturating_sub(1)).unwrap_or(u32::MAX);
     Range::new(
         Position::new(line, 0),
-        Position::new(line, u32::try_from(end).unwrap_or(u32::MAX)),
+        Position::new(line, width(content, encoding)),
     )
+}
+
+/// Returns the range covering `name` where it is declared on a 1-based line.
+///
+/// A `FuncSpace` records lines, not columns, so the name's own columns have
+/// to be recovered from the signature. The first whole-word occurrence is
+/// the declaration: whatever precedes it on the line is a keyword, a
+/// modifier, or an assignment target for the same thing.
+///
+/// Returns `None` when the name is not on that line at all, which is the
+/// case for an anonymous function and for a name the parser qualified.
+pub fn name_range(
+    text: &str,
+    line: usize,
+    name: &str,
+    encoding: PositionEncoding,
+) -> Option<Range> {
+    if name.is_empty() {
+        return None;
+    }
+    let content = line_content(text, line)?;
+    let start = whole_word(content, name)?;
+    let line = u32::try_from(line.saturating_sub(1)).unwrap_or(u32::MAX);
+    let before = width(&content[..start], encoding);
+    Some(Range::new(
+        Position::new(line, before),
+        Position::new(line, before.saturating_add(width(name, encoding))),
+    ))
+}
+
+/// Returns a 1-based line of `text` without its line break.
+fn line_content(text: &str, line: usize) -> Option<&str> {
+    text.split_inclusive('\n')
+        .nth(line.saturating_sub(1))
+        .map(|line| line.trim_end_matches(['\n', '\r']))
+}
+
+/// Measures `text` in the units the client negotiated.
+fn width(text: &str, encoding: PositionEncoding) -> u32 {
+    let units = match encoding {
+        PositionEncoding::Utf8 => text.len(),
+        PositionEncoding::Utf16 => text.chars().map(char::len_utf16).sum(),
+        PositionEncoding::Utf32 => text.chars().count(),
+    };
+    u32::try_from(units).unwrap_or(u32::MAX)
+}
+
+/// Finds `needle` in `haystack` where it is not part of a longer name.
+fn whole_word(haystack: &str, needle: &str) -> Option<usize> {
+    let mut from = 0;
+    while let Some(offset) = haystack.get(from..)?.find(needle) {
+        let start = from + offset;
+        let end = start + needle.len();
+        let before = haystack[..start].chars().next_back();
+        let after = haystack[end..].chars().next();
+        if !before.is_some_and(is_name_char) && !after.is_some_and(is_name_char) {
+            return Some(start);
+        }
+        from = start + haystack[start..].chars().next().map_or(1, char::len_utf8);
+    }
+    None
+}
+
+/// Whether `c` can appear inside an identifier, in any language analyzed
+/// here. `$` is included for JavaScript.
+fn is_name_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_' || c == '$'
 }
 
 #[cfg(test)]
@@ -206,6 +263,49 @@ mod tests {
     fn a_line_past_the_end_yields_an_empty_range() {
         let range = line_range("one line\n", 99, PositionEncoding::Utf8);
         assert_eq!(range.start, range.end);
+    }
+
+    fn name(text: &str, line: usize, name: &str) -> Option<(u32, u32)> {
+        name_range(text, line, name, PositionEncoding::Utf16)
+            .map(|range| (range.start.character, range.end.character))
+    }
+
+    #[test]
+    fn a_name_range_covers_the_declared_name() {
+        assert_eq!(name("fn add(a: u32) -> u32 {\n", 1, "add"), Some((3, 6)));
+        assert_eq!(name("def total(values):\n", 1, "total"), Some((4, 9)));
+        assert_eq!(
+            name("    async function load($el) {\n", 1, "load"),
+            Some((19, 23))
+        );
+    }
+
+    #[test]
+    fn a_name_inside_a_longer_word_is_not_the_declaration() {
+        // `add` starts `addHandler` before it names the function.
+        assert_eq!(
+            name("const addHandler = function add() {\n", 1, "add"),
+            Some((28, 31))
+        );
+        assert_eq!(name("fn adder(a: u32) {\n", 1, "add"), None);
+        assert_eq!(name("fn my_add(a: u32) {\n", 1, "add"), None);
+    }
+
+    #[test]
+    fn a_name_that_is_not_on_the_line_has_no_range() {
+        assert_eq!(name("fn add(a: u32) {\n", 1, "other"), None);
+        assert_eq!(name("fn add(a: u32) {\n", 1, ""), None);
+        assert_eq!(name("fn add(a: u32) {\n", 99, "add"), None);
+    }
+
+    #[test]
+    fn a_name_range_counts_in_the_negotiated_encoding() {
+        let text = "let \u{1F600} = fn wide() {\n";
+        let utf8 = name_range(text, 1, "wide", PositionEncoding::Utf8).unwrap();
+        let utf16 = name_range(text, 1, "wide", PositionEncoding::Utf16).unwrap();
+        assert_eq!(utf8.start.character, 14);
+        assert_eq!(utf16.start.character, 12);
+        assert_eq!(utf16.end.character - utf16.start.character, 4);
     }
 
     #[test]

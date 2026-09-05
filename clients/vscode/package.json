@@ -1,0 +1,185 @@
+{
+  "name": "lspf-analysis",
+  "displayName": "LSPF Analysis",
+  "description": "Tells you, while you type, which functions are getting hard to work with.",
+  "version": "0.1.0",
+  "publisher": "meymchen",
+  "private": true,
+  "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/meymchen/lspf-analysis.git",
+    "directory": "clients/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/meymchen/lspf-analysis/issues"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "complexity",
+    "code quality",
+    "metrics",
+    "language server"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:javascriptreact",
+    "onLanguage:python",
+    "onLanguage:rust",
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "lspfAnalysis.restartServer",
+        "title": "Restart Server",
+        "category": "LSPF Analysis"
+      }
+    ],
+    "configuration": {
+      "title": "LSPF Analysis",
+      "properties": {
+        "lspfAnalysis.health.complexityThreshold": {
+          "type": "number",
+          "default": 15,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Cognitive complexity scoring 50%. Scores the control-flow pillar alongside cyclomatic complexity; the pillar takes whichever of the two scores worse."
+        },
+        "lspfAnalysis.health.cyclomaticThreshold": {
+          "type": "number",
+          "default": 10,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Cyclomatic complexity scoring 50%. Scores the control-flow pillar alongside cognitive complexity; the pillar takes whichever of the two scores worse. McCabe's recommended upper bound is 10."
+        },
+        "lspfAnalysis.health.lengthThreshold": {
+          "type": "number",
+          "default": 30,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Statements (logical lines) scoring 50%. The only measure of the size pillar."
+        },
+        "lspfAnalysis.health.workingMemoryThreshold": {
+          "type": "number",
+          "default": 8,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Names held at once scoring 50%. Scores the vocabulary-load pillar alongside Halstead difficulty; the pillar takes whichever of the two scores worse."
+        },
+        "lspfAnalysis.health.halsteadDifficultyThreshold": {
+          "type": "number",
+          "default": 12,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Halstead difficulty scoring 50%. Scores the vocabulary-load pillar alongside working memory; the pillar takes whichever of the two scores worse."
+        },
+        "lspfAnalysis.health.weights.complexity": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Weight of the control-flow pillar in the quality blend. Weights are normalized by their sum, so only their ratio matters."
+        },
+        "lspfAnalysis.health.weights.length": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Weight of the size pillar in the quality blend."
+        },
+        "lspfAnalysis.health.weights.workingMemory": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "markdownDescription": "Weight of the vocabulary-load pillar in the quality blend."
+        },
+        "lspfAnalysis.health.weights.interface": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "markdownDescription": "Weight of the interface pillar in the quality blend. Half the others by default: a wide signature is a real signal, but a narrower one than the three pillars describing what a function does."
+        },
+        "lspfAnalysis.health.parametersThreshold": {
+          "type": "number",
+          "default": 4,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "Parameter count scoring 50%. The only measure of the interface pillar."
+        },
+        "lspfAnalysis.health.qualityWarn": {
+          "type": "number",
+          "default": 25,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Quality below this is reported as a warning."
+        },
+        "lspfAnalysis.health.qualityError": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "maximum": 100,
+          "markdownDescription": "Quality below this is reported as an error rather than a warning."
+        },
+        "lspfAnalysis.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Publish diagnostics at all. Turning this off clears what is displayed."
+        },
+        "lspfAnalysis.diagnostics.perMetric": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also report a function whose quality passes but which has one badly scoring pillar, as a hint."
+        },
+        "lspfAnalysis.diagnostics.file": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Also report the file as a whole when its quality is bad enough to be an error."
+        },
+        "lspfAnalysis.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the active file's overall quality in the status bar."
+        },
+        "lspfAnalysis.server.path": {
+          "type": "string",
+          "default": "",
+          "scope": "machine-overridable",
+          "markdownDescription": "Path to an `lspf-analysis` binary to use instead of the one packaged with this extension. A leading `~` is expanded."
+        },
+        "lspfAnalysis.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Trace the messages exchanged with the language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
+    "bundle": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "prepare:server": "node scripts/prepareServer.mjs",
+    "package": "node scripts/package.mjs",
+    "vscode:prepublish": "npm run bundle"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}

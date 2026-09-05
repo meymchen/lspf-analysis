@@ -14,6 +14,7 @@ pub mod diagnostics;
 pub mod document;
 pub mod formats;
 pub mod hover;
+pub mod status;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -32,6 +33,7 @@ use lspf_analysis_core::health::FileHealth;
 
 use config::Settings;
 use document::{analyze, language_for, uri_to_path};
+use status::FileHealthNotification;
 
 /// What the server carries across one connection.
 ///
@@ -100,13 +102,19 @@ async fn report_for(ctx: &ServerContext, uri: &Uri, settings: &Settings) -> Opti
     })
 }
 
-/// Scores a document and publishes its diagnostics.
+/// Scores a document, publishes its diagnostics, and reports the file total.
 async fn publish(ctx: ServerContext, uri: Uri, settings: Settings) {
     let Some(analyzed) = report_for(&ctx, &uri, &settings).await else {
         return;
     };
     let encoding = ctx.documents().position_encoding();
     let diagnostics = diagnostics::build(&analyzed.report, &analyzed.text, encoding, &settings);
+
+    // The file-level score has no line to sit on, so it travels separately;
+    // a client that does not listen for it simply ignores it.
+    let _ = ctx
+        .client()
+        .notify::<FileHealthNotification>(status::summarize(&uri, &analyzed.report, &settings));
 
     let _ = ctx.publish_diagnostics(PublishDiagnosticsParams {
         uri,
@@ -185,9 +193,11 @@ async fn hover(
     let Some(analyzed) = report_for(&ctx, &uri, &settings).await else {
         return Ok(None);
     };
-    // `FuncSpace` lines are 1-based; LSP positions are not.
-    let line = params.text_document_position_params.position.line as usize + 1;
-    let Some(function) = hover::function_at(&analyzed.report, line) else {
+    let encoding = ctx.documents().position_encoding();
+    let position = params.text_document_position_params.position;
+    let Some((function, range)) =
+        hover::function_at(&analyzed.report, &analyzed.text, position, encoding)
+    else {
         return Ok(None);
     };
 
@@ -196,11 +206,9 @@ async fn hover(
             kind: MarkupKind::Markdown,
             value: hover::render(function),
         }),
-        range: Some(document::line_range(
-            &analyzed.text,
-            function.start_line,
-            ctx.documents().position_encoding(),
-        )),
+        // The name, and nothing else: the editor highlights this while the
+        // hover is up, and other providers contribute their own.
+        range: Some(range),
     }))
 }
 

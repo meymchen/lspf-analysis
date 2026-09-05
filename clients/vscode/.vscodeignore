@@ -1,0 +1,11 @@
+*.vsix
+*.tsbuildinfo
+.vscode-test/
+dist/*.map
+esbuild.mjs
+node_modules/**
+out/**
+scripts/**
+src/**
+test/**
+tsconfig.json

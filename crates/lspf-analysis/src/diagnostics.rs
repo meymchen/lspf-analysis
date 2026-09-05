@@ -72,25 +72,40 @@ fn quality_diagnostic(
     } else {
         DiagnosticSeverity::Warning
     };
-    let (pillar, _) = function.scores.worst_pillar();
+    let pillar = function.scores.worst_pillar();
+    // Naming the measurement that set the pillar's score turns "this is
+    // complex" into something the reader can act on.
+    let cause = pillar.worst_measure().map_or_else(
+        || pillar.name.to_string(),
+        |metric| format!("{} ({} {:.0})", pillar.name, metric.name, metric.value),
+    );
     Diagnostic {
         range: line_range(text, function.start_line, encoding),
         severity: Some(severity),
         code: Some(Code::String("quality".into())),
         source: Some(SOURCE.into()),
         message: format!(
-            "function `{name}`: quality {quality:.0}% ({grade}), worst pillar {pillar} \
-             — complexity {complexity:.0}, length {length:.0} statements, working memory {memory:.0}",
+            "function `{name}`: quality {quality:.0}% ({grade}), worst pillar {cause} — {summary}",
             name = function.display_name(),
             quality = function.quality,
             grade = function.grade,
-            complexity = function.scores.complexity,
-            length = function.scores.length,
-            memory = function.scores.working_memory,
+            summary = summarize(function),
         )
         .into(),
         ..Diagnostic::default()
     }
+}
+
+/// Lists every measurement behind a function's score, worst pillar first.
+fn summarize(function: &FunctionHealth) -> String {
+    function
+        .scores
+        .pillars()
+        .iter()
+        .flat_map(|pillar| pillar.measures.iter())
+        .map(|metric| format!("{} {:.0}", metric.name, metric.value))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Advisory diagnostics for a function that passes overall but has one
@@ -100,44 +115,43 @@ fn pillar_diagnostics(
     text: &str,
     encoding: PositionEncoding,
 ) -> Vec<Diagnostic> {
-    let scores = &function.scores;
-    let pillars = [
-        (
-            "complexity",
-            scores.complexity_score,
-            scores.complexity,
-            "cognitive complexity",
-        ),
-        (
-            "method-length",
-            scores.length_score,
-            scores.length,
-            "statements",
-        ),
-        (
-            "working-memory",
-            scores.working_memory_score,
-            scores.working_memory,
-            "names held at once",
-        ),
-    ];
-
-    pillars
-        .into_iter()
-        .filter(|(_, score, _, _)| *score < PILLAR_FLOOR)
-        .map(|(code, _, raw, label)| Diagnostic {
+    function
+        .scores
+        .pillars()
+        .iter()
+        .flat_map(|pillar| pillar.measures.iter())
+        .filter(|metric| metric.score < PILLAR_FLOOR)
+        .map(|metric| Diagnostic {
             range: line_range(text, function.start_line, encoding),
             severity: Some(DiagnosticSeverity::Information),
-            code: Some(Code::String(code.into())),
+            code: Some(Code::String(metric_code(metric.name).into())),
             source: Some(SOURCE.into()),
             message: format!(
-                "function `{name}`: {raw:.0} {label}",
+                "function `{name}`: {value:.0} {metric}",
                 name = function.display_name(),
+                value = metric.value,
+                metric = metric.name,
             )
             .into(),
             ..Diagnostic::default()
         })
         .collect()
+}
+
+/// The stable `code` a per-metric diagnostic carries.
+///
+/// Editors and suppression comments key off this, so it is spelled out here
+/// rather than derived from the display name, which is free to change.
+fn metric_code(metric: &str) -> &'static str {
+    match metric {
+        "cognitive complexity" => "cognitive-complexity",
+        "cyclomatic complexity" => "cyclomatic-complexity",
+        "statements" => "method-length",
+        "working memory" => "working-memory",
+        "Halstead difficulty" => "halstead-difficulty",
+        "parameters" => "parameters",
+        _ => "metric",
+    }
 }
 
 #[cfg(test)]

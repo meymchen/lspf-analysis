@@ -1,0 +1,80 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug language server",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/lspf-analysis",
+      "args": [
+        "serve",
+        "--tcp",
+        "127.0.0.1:9257"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_LOG": "lspf=debug,lspf_analysis=debug"
+      },
+      "sourceLanguages": [
+        "rust"
+      ],
+      "preLaunchTask": "build language server",
+      "presentation": {
+        "group": "2_parts",
+        "order": 1
+      }
+    },
+    {
+      "name": "Run extension against the debugged server",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/clients/vscode/dist/**/*.js"
+      ],
+      "env": {
+        "LSPF_ANALYSIS_DEBUG_TCP": "9257"
+      },
+      "preLaunchTask": "bundle extension",
+      "presentation": {
+        "group": "2_parts",
+        "order": 2
+      }
+    },
+    {
+      "name": "Run language extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/clients/vscode/dist/**/*.js"
+      ],
+      "preLaunchTask": "prepare extension development host",
+      "presentation": {
+        "group": "1_main",
+        "order": 2
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug extension and server",
+      "configurations": [
+        "Debug language server",
+        "Run extension against the debugged server"
+      ],
+      "preLaunchTask": "install extension dependencies",
+      "stopAll": true,
+      "presentation": {
+        "group": "1_main",
+        "order": 1
+      }
+    }
+  ]
+}

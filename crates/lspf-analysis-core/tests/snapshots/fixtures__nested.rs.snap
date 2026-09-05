@@ -91,20 +91,6 @@ metrics:
           mi_original: 88.285
           mi_sei: 52.482
           mi_visual_studio: 51.629
-        abc:
-          assignments: 0
-          branches: 0
-          conditions: 0
-          magnitude: 0
-          assignments_average: 0
-          branches_average: 0
-          conditions_average: 0
-          assignments_min: 0
-          assignments_max: 0
-          branches_min: 0
-          branches_max: 0
-          conditions_min: 0
-          conditions_max: 0
         working_memory:
           sum: 7
           average: 7
@@ -188,20 +174,6 @@ metrics:
       mi_original: 88.055
       mi_sei: 52.252
       mi_visual_studio: 51.494
-    abc:
-      assignments: 0
-      branches: 0
-      conditions: 0
-      magnitude: 0
-      assignments_average: 0
-      branches_average: 0
-      conditions_average: 0
-      assignments_min: 0
-      assignments_max: 0
-      branches_min: 0
-      branches_max: 0
-      conditions_min: 0
-      conditions_max: 0
     working_memory:
       sum: 7
       average: 7
@@ -209,19 +181,47 @@ metrics:
       max: 7
 health:
   path: "[filepath]"
-  quality: 60.646
-  grade: good
+  quality: 45.278
+  grade: fair
   maintainability_index: 51.494
   functions:
     - name: classify
       start_line: 1
       end_line: 21
-      quality: 60.646
-      grade: good
+      quality: 45.278
+      grade: fair
       scores:
-        complexity: 16
-        complexity_score: 46.778
-        length: 13
-        length_score: 84.191
-        working_memory: 7
-        working_memory_score: 56.637
+        control_flow:
+          name: control flow
+          score: 46.778
+          measures:
+            - name: cognitive complexity
+              value: 16
+              score: 46.778
+            - name: cyclomatic complexity
+              value: 8
+              score: 60.976
+        size:
+          name: size
+          score: 84.191
+          measures:
+            - name: statements
+              value: 13
+              score: 84.191
+        vocabulary:
+          name: vocabulary load
+          score: 25.389
+          measures:
+            - name: working memory
+              value: 7
+              score: 56.637
+            - name: Halstead difficulty
+              value: 20.571
+              score: 25.389
+        interface:
+          name: interface
+          score: 39.024
+          measures:
+            - name: parameters
+              value: 5
+              score: 39.024

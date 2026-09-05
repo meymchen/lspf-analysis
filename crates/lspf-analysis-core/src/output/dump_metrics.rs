@@ -329,6 +329,10 @@ fn dump_abc(
     last: bool,
     stdout: &mut StandardStreamLock,
 ) -> std::io::Result<()> {
+    if stats.is_disabled() {
+        return Ok(());
+    }
+
     let (pref_child, pref) = if last { ("   ", "`- ") } else { ("|  ", "|- ") };
 
     color(stdout, Color::Blue)?;

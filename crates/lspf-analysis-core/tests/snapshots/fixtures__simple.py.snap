@@ -91,20 +91,6 @@ metrics:
           mi_original: 142.748
           mi_sei: 130.342
           mi_visual_studio: 83.478
-        abc:
-          assignments: 0
-          branches: 0
-          conditions: 0
-          magnitude: 0
-          assignments_average: 0
-          branches_average: 0
-          conditions_average: 0
-          assignments_min: 0
-          assignments_max: 0
-          branches_min: 0
-          branches_max: 0
-          conditions_min: 0
-          conditions_max: 0
         working_memory:
           sum: 2
           average: 2
@@ -193,20 +179,6 @@ metrics:
           mi_original: 109.687
           mi_sei: 83.054
           mi_visual_studio: 64.145
-        abc:
-          assignments: 0
-          branches: 0
-          conditions: 0
-          magnitude: 0
-          assignments_average: 0
-          branches_average: 0
-          conditions_average: 0
-          assignments_min: 0
-          assignments_max: 0
-          branches_min: 0
-          branches_max: 0
-          conditions_min: 0
-          conditions_max: 0
         working_memory:
           sum: 5
           average: 5
@@ -290,20 +262,6 @@ metrics:
       mi_original: 101.483
       mi_sei: 71.421
       mi_visual_studio: 59.347
-    abc:
-      assignments: 0
-      branches: 0
-      conditions: 0
-      magnitude: 0
-      assignments_average: 0
-      branches_average: 0
-      conditions_average: 0
-      assignments_min: 0
-      assignments_max: 0
-      branches_min: 0
-      branches_max: 0
-      conditions_min: 0
-      conditions_max: 0
     working_memory:
       sum: 7
       average: 3.5
@@ -311,31 +269,87 @@ metrics:
       max: 5
 health:
   path: "[filepath]"
-  quality: 80.379
-  grade: excellent
+  quality: 75.772
+  grade: good
   maintainability_index: 59.347
   functions:
     - name: add
       start_line: 1
       end_line: 2
-      quality: 97.963
+      quality: 94.528
       grade: excellent
       scores:
-        complexity: 0
-        complexity_score: 100
-        length: 1
-        length_score: 99.889
-        working_memory: 2
-        working_memory_score: 94.118
+        control_flow:
+          name: control flow
+          score: 99.01
+          measures:
+            - name: cognitive complexity
+              value: 0
+              score: 100
+            - name: cyclomatic complexity
+              value: 1
+              score: 99.01
+        size:
+          name: size
+          score: 99.889
+          measures:
+            - name: statements
+              value: 1
+              score: 99.889
+        vocabulary:
+          name: vocabulary load
+          score: 92.837
+          measures:
+            - name: working memory
+              value: 2
+              score: 94.118
+            - name: Halstead difficulty
+              value: 3.333
+              score: 92.837
+        interface:
+          name: interface
+          score: 80
+          measures:
+            - name: parameters
+              value: 2
+              score: 80
     - name: classify
       start_line: 5
       end_line: 12
-      quality: 77.867
+      quality: 73.092
       grade: good
       scores:
-        complexity: 10
-        complexity_score: 69.231
-        length: 7
-        length_score: 94.837
-        working_memory: 5
-        working_memory_score: 71.91
+        control_flow:
+          name: control flow
+          score: 69.231
+          measures:
+            - name: cognitive complexity
+              value: 10
+              score: 69.231
+            - name: cyclomatic complexity
+              value: 5
+              score: 80
+        size:
+          name: size
+          score: 94.837
+          measures:
+            - name: statements
+              value: 7
+              score: 94.837
+        vocabulary:
+          name: vocabulary load
+          score: 71.91
+          measures:
+            - name: working memory
+              value: 5
+              score: 71.91
+            - name: Halstead difficulty
+              value: 6.682
+              score: 76.333
+        interface:
+          name: interface
+          score: 50
+          measures:
+            - name: parameters
+              value: 4
+              score: 50
