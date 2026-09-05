@@ -55,24 +55,28 @@ Each metric is scored on its own before anything is blended, so a function is
 never rescued by being short if it is impenetrable. A raw value $r \ge 0$
 with threshold $t > 0$ scores
 
-$$
+```math
 s(r) = \frac{100}{1 + \left(\dfrac{r}{t}\right)^{2}}
-$$
+```
 
 giving $s(0) = 100$, $s(t) = 50$, $s(2t) = 20$ and $s(3t) = 10$ — smooth,
 monotone, and always in $(0, 100]$.
 
-A pillar $P$ scores at its worst metric,
+A pillar $P$ scores at its worst metric, with each metric evaluated against
+its own threshold:
 
-$$
+```math
 s_P = \min_{m \in P} s(r_m)
-$$
+```
 
 and the pillars blend into quality as a weighted geometric mean:
 
-$$
-Q = \prod_{P} s_P^{\,w_P}, \qquad \sum_{P} w_P = 1
-$$
+```math
+Q = \prod_{P} s_P^{w_P}
+```
+
+Here $w_P \ge 0$ are the normalized pillar weights, with $\sum_P w_P = 1$.
+The default relative weights $(1, 1, 1, 0.5)$ become $(2/7, 2/7, 2/7, 1/7)$.
 
 A geometric mean rather than an arithmetic one, so one collapsed pillar drags
 the whole score down instead of hiding behind the others.
