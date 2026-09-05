@@ -365,3 +365,4 @@ health:
               value: 4
               threshold: 4
               score: 50
+  classes: []

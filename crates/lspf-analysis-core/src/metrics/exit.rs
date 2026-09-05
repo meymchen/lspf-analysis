@@ -145,6 +145,14 @@ impl Exit for TsxCode {
     }
 }
 
+impl Exit for JavaCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if matches!(node.kind_id().into(), Java::ReturnStatement) {
+            stats.exit += 1;
+        }
+    }
+}
+
 impl Exit for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if matches!(
@@ -301,6 +309,76 @@ mod tests {
                       "average": 0.5,
                       "min": 0.0,
                       "max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_no_exit() {
+        check_metrics::<JavaParser>("int a = 42;", "foo.java", |metric| {
+            // 0 functions
+            insta::assert_json_snapshot!(
+                metric.nexits,
+                @r###"
+                    {
+                      "sum": 0.0,
+                      "average": null,
+                      "min": 0.0,
+                      "max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn java_simple_function() {
+        check_metrics::<JavaParser>(
+            "class A {
+              public int sum(int x, int y) {
+                return x + y;
+              }
+            }",
+            "foo.java",
+            |metric| {
+                // 1 exit / 1 space
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 1.0,
+                      "average": 1.0,
+                      "min": 0.0,
+                      "max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_split_function() {
+        check_metrics::<JavaParser>(
+            "class A {
+              public int multiply(int x, int y) {
+                if(x == 0 || y == 0){
+                    return 0;
+                }
+                return x * y;
+              }
+            }",
+            "foo.java",
+            |metric| {
+                // 2 exit / space 1
+                insta::assert_json_snapshot!(
+                    metric.nexits,
+                    @r###"
+                    {
+                      "sum": 2.0,
+                      "average": 2.0,
+                      "min": 0.0,
+                      "max": 2.0
                     }"###
                 );
             },

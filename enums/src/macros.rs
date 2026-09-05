@@ -23,6 +23,7 @@ macro_rules! mk_get_language {
                 Lang::Tsx => tree_sitter_typescript::LANGUAGE_TSX.into(),
                 Lang::Javascript => tree_sitter_javascript::LANGUAGE.into(),
                 Lang::Python => tree_sitter_python::LANGUAGE.into(),
+                Lang::Java => tree_sitter_java::LANGUAGE.into(),
                 Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
             }
         }

@@ -33,6 +33,7 @@
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "activationEvents": [
+    "onLanguage:java",
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
     "onLanguage:python",
@@ -163,6 +164,30 @@
           "default": 4,
           "exclusiveMinimum": 0,
           "markdownDescription": "%config.health.parametersThreshold%"
+        },
+        "lspfAnalysis.health.weights.classDesign": {
+          "type": "number",
+          "default": 0.5,
+          "minimum": 0,
+          "markdownDescription": "%config.health.weights.classDesign%"
+        },
+        "lspfAnalysis.health.wmcThreshold": {
+          "type": "number",
+          "default": 34,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "%config.health.wmcThreshold%"
+        },
+        "lspfAnalysis.health.publicMethodsThreshold": {
+          "type": "number",
+          "default": 14,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "%config.health.publicMethodsThreshold%"
+        },
+        "lspfAnalysis.health.publicAttributesThreshold": {
+          "type": "number",
+          "default": 8,
+          "exclusiveMinimum": 0,
+          "markdownDescription": "%config.health.publicAttributesThreshold%"
         },
         "lspfAnalysis.health.qualityWarn": {
           "type": "number",

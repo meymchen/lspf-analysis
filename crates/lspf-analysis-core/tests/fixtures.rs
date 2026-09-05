@@ -12,6 +12,18 @@ use lspf_analysis_core::{FuncSpace, get_function_spaces, guess_language, read_fi
 
 const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
+/// Every fixture, one per supported grammar plus the deliberately tangled
+/// `nested.rs`.
+const NAMES: [&str; 7] = [
+    "simple.rs",
+    "nested.rs",
+    "simple.py",
+    "simple.js",
+    "simple.ts",
+    "simple.tsx",
+    "simple.java",
+];
+
 /// Everything a fixture asserts: the metrics tree, and the health derived
 /// from it.
 #[derive(serde::Serialize)]
@@ -45,6 +57,10 @@ fn assert_fixture(name: &str) {
         ".health.functions[].scores.*.score" => insta::rounded_redaction(3),
         ".health.functions[].scores.*.measures[].value" => insta::rounded_redaction(3),
         ".health.functions[].scores.*.measures[].score" => insta::rounded_redaction(3),
+        ".health.classes[].quality" => insta::rounded_redaction(3),
+        ".health.classes[].scores.*.score" => insta::rounded_redaction(3),
+        ".health.classes[].scores.*.measures[].value" => insta::rounded_redaction(3),
+        ".health.classes[].scores.*.measures[].score" => insta::rounded_redaction(3),
         // Paths differ between checkouts.
         ".metrics.name" => "[filepath]",
         ".health.path" => "[filepath]",
@@ -82,16 +98,13 @@ fn tsx_simple() {
 }
 
 #[test]
+fn java_simple() {
+    assert_fixture("simple.java");
+}
+
+#[test]
 fn every_supported_language_is_covered() {
-    let names = [
-        "simple.rs",
-        "nested.rs",
-        "simple.py",
-        "simple.js",
-        "simple.ts",
-        "simple.tsx",
-    ];
-    let mut languages: Vec<&'static str> = names
+    let mut languages: Vec<&'static str> = NAMES
         .iter()
         .map(|name| {
             let path = PathBuf::from(FIXTURES).join(name);
@@ -101,9 +114,12 @@ fn every_supported_language_is_covered() {
         .collect();
     languages.sort_unstable();
     languages.dedup();
-    // Tsx and Typescript share a display name, so four distinct names cover
-    // all five parsers.
-    assert_eq!(languages, ["javascript", "python", "rust", "typescript"]);
+    // Tsx and Typescript share a display name, so five distinct names cover
+    // all six parsers.
+    assert_eq!(
+        languages,
+        ["java", "javascript", "python", "rust", "typescript"]
+    );
 }
 
 #[test]
@@ -120,23 +136,17 @@ fn the_nested_fixture_scores_worse_than_the_simple_one() {
 
 #[test]
 fn a_repository_report_spans_every_fixture() {
-    let files: Vec<FileHealth> = [
-        "simple.rs",
-        "nested.rs",
-        "simple.py",
-        "simple.js",
-        "simple.ts",
-        "simple.tsx",
-    ]
-    .iter()
-    .map(|name| analyze(name).health)
-    .collect();
+    let files: Vec<FileHealth> = NAMES.iter().map(|name| analyze(name).health).collect();
 
     let repo = RepoHealth::of(files.iter(), &HealthConfig::default());
-    assert_eq!(repo.files, 6);
+    assert_eq!(repo.files, 7);
     assert_eq!(
-        repo.functions, 11,
-        "two functions per fixture, one in nested.rs"
+        repo.functions, 14,
+        "two functions per fixture, one in nested.rs, plus the Java interface's method"
+    );
+    assert_eq!(
+        repo.classes, 2,
+        "only Java has class-level metrics: the interface and the class"
     );
     assert_eq!(
         repo.excellent + repo.good + repo.fair + repo.poor,

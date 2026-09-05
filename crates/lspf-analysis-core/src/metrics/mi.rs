@@ -104,6 +104,7 @@ where
 
 implement_metric_trait!(
     [Mi],
+    JavaCode,
     PythonCode,
     JavascriptCode,
     TypescriptCode,

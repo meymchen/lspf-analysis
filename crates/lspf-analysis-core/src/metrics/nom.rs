@@ -203,6 +203,7 @@ where
 
 implement_metric_trait!(
     [Nom],
+    JavaCode,
     PythonCode,
     JavascriptCode,
     TypescriptCode,
@@ -598,6 +599,84 @@ mod tests {
                       "average": 0.5,
                       "functions_min": 0.0,
                       "functions_max": 0.0,
+                      "closures_min": 0.0,
+                      "closures_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_nom() {
+        check_metrics::<JavaParser>(
+            "class A {
+                public void foo(){
+                    return;
+                }
+                public void bar(){
+                    return;
+                }
+            }",
+            "foo.java",
+            |metric| {
+                // Number of spaces = 4
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 2.0,
+                      "closures": 0.0,
+                      "functions_average": 0.5,
+                      "closures_average": 0.0,
+                      "total": 2.0,
+                      "average": 0.5,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
+                      "closures_min": 0.0,
+                      "closures_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_closure_nom() {
+        check_metrics::<JavaParser>(
+            "interface printable{
+                void print();
+              }
+
+              interface IntFunc {
+                int func(int n);
+              }
+
+              class Printer implements printable{
+                public void print(){System.out.println(\"Hello\");}
+
+                public static void main(String args[]){
+                  Printer  obj = new Printer();
+                  obj.print();
+                  IntFunc meaning = (i) -> i + 42;
+                  int i = meaning.func(1);
+                }
+              }",
+            "foo.java",
+            |metric| {
+                // Number of spaces = 8
+                insta::assert_json_snapshot!(
+                    metric.nom,
+                    @r###"
+                    {
+                      "functions": 4.0,
+                      "closures": 1.0,
+                      "functions_average": 0.5,
+                      "closures_average": 0.125,
+                      "total": 5.0,
+                      "average": 0.625,
+                      "functions_min": 0.0,
+                      "functions_max": 1.0,
                       "closures_min": 0.0,
                       "closures_max": 1.0
                     }"###

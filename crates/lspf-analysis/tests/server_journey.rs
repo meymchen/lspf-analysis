@@ -7,7 +7,7 @@ use std::time::Duration;
 use bytes::Bytes;
 use lspf::testing::ServerJourney;
 use lspf::types::{
-    DiagnosticSeverity, DidChangeConfigurationParams, DidChangeTextDocumentParams,
+    Code, DiagnosticSeverity, DidChangeConfigurationParams, DidChangeTextDocumentParams,
     DidCloseTextDocumentParams, DidOpenTextDocumentParams, HoverParams, InitializeParams, Position,
     PublishDiagnosticsParams, TextDocumentContentChangeEvent,
     TextDocumentContentChangeWholeDocument, TextDocumentIdentifier, TextDocumentItem,
@@ -103,6 +103,48 @@ fn open(uri: &Uri, text: &str) -> RawMessage {
         },
     )
 }
+
+fn java_uri() -> Uri {
+    Uri::from_str("file:///workspace/src/Wide.java").unwrap()
+}
+
+fn open_java(uri: &Uri, text: &str) -> RawMessage {
+    notification(
+        "textDocument/didOpen",
+        &DidOpenTextDocumentParams {
+            text_document: TextDocumentItem {
+                uri: uri.clone(),
+                language_id: "java".into(),
+                version: 1,
+                text: text.into(),
+            },
+        },
+    )
+}
+
+/// A Java class wide enough to fail the class pillar.
+fn wide_java_class() -> String {
+    let mut source = String::from("public class Wide {\n");
+    for index in 0..40 {
+        source.push_str(&format!("    public int field{index};\n"));
+        source.push_str(&format!(
+            "    public int get{index}() {{ return field{index}; }}\n"
+        ));
+    }
+    source.push_str("}\n");
+    source
+}
+
+/// A Java method behind annotations, whose declaration node therefore
+/// starts a line above its own name.
+const ANNOTATED_JAVA: &str = "public class Ann {
+    @Override
+    @Nullable
+    public int plain(int a, int b) {
+        return a + b;
+    }
+}
+";
 
 async fn start() -> ServerJourney {
     ServerJourney::start(lspf_analysis::server(
@@ -322,6 +364,115 @@ async fn hover_reports_every_pillar() {
             "{expected} missing: {markdown}"
         );
     }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_wide_java_class_is_diagnosed_and_hovers_its_own_pillar() {
+    let uri = java_uri();
+    let mut journey = start().await;
+    journey
+        .peer()
+        .send(open_java(&uri, &wide_java_class()))
+        .unwrap();
+
+    let published = diagnostics(&mut journey).await;
+    let class = published
+        .diagnostics
+        .iter()
+        .find(|d| d.code == Some(Code::String("class-quality".into())))
+        .unwrap_or_else(|| panic!("no class diagnostic: {:?}", published.diagnostics));
+    assert_eq!(class.range.start.line, 0, "the `public class` line");
+    assert!(message(class).contains("`Wide`"), "{}", message(class));
+
+    // `public class Wide`: the name starts at column 13.
+    journey
+        .peer()
+        .send(request(
+            11,
+            "textDocument/hover",
+            &HoverParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position::new(0, 13),
+                },
+                work_done_progress_params: WorkDoneProgressParams::default(),
+            },
+        ))
+        .unwrap();
+
+    let response = journey.peer().recv().await.unwrap();
+    let RawMessage::Response {
+        id: _,
+        result: Ok(result),
+    } = response
+    else {
+        panic!("expected a successful hover response, got {response:?}");
+    };
+    let value: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    let markdown = value["contents"]["value"].as_str().expect("markdown hover");
+    for expected in [
+        "Wide",
+        "class design",
+        "weighted methods",
+        "public methods",
+        "public attributes",
+    ] {
+        assert!(
+            markdown.contains(expected),
+            "{expected} missing: {markdown}"
+        );
+    }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn an_annotated_java_method_hovers_on_its_name() {
+    let uri = java_uri();
+    let mut journey = start().await;
+    journey
+        .peer()
+        .send(open_java(&uri, ANNOTATED_JAVA))
+        .unwrap();
+    let _ = diagnostics(&mut journey).await;
+
+    // `    public int plain(int a, int b) {` is line 4; the name is at
+    // column 15, two annotations below where the method's space starts.
+    journey
+        .peer()
+        .send(request(
+            12,
+            "textDocument/hover",
+            &HoverParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position::new(3, 15),
+                },
+                work_done_progress_params: WorkDoneProgressParams::default(),
+            },
+        ))
+        .unwrap();
+
+    let response = journey.peer().recv().await.unwrap();
+    let RawMessage::Response {
+        id: _,
+        result: Ok(result),
+    } = response
+    else {
+        panic!("expected a successful hover response, got {response:?}");
+    };
+    let value: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    assert!(
+        !value.is_null(),
+        "an annotated method should still answer on its name"
+    );
+    let markdown = value["contents"]["value"].as_str().expect("markdown hover");
+    assert!(markdown.contains("plain"), "{markdown}");
+    // The highlighted range is the name, on the signature line.
+    assert_eq!(value["range"]["start"]["line"], 3);
+    assert_eq!(value["range"]["start"]["character"], 15);
 
     journey.finish().await.unwrap();
 }

@@ -69,6 +69,16 @@ impl<'a> Node<'a> {
         self.0.parent().map(Node)
     }
 
+    pub(crate) fn previous_sibling(&self) -> Option<Node<'a>> {
+        self.0.prev_sibling().map(Node)
+    }
+
+    /// Returns the first child whose kind `pred` accepts.
+    #[inline(always)]
+    pub(crate) fn first_child(&self, pred: fn(u16) -> bool) -> Option<Node<'a>> {
+        self.children().find(|child| pred(child.kind_id()))
+    }
+
     #[inline(always)]
     pub(crate) fn has_sibling(&self, id: u16) -> bool {
         self.0.parent().is_some_and(|parent| {

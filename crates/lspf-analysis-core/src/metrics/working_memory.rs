@@ -158,6 +158,27 @@ const PYTHON_SPEC: LangSpec = LangSpec {
     ],
 };
 
+const JAVA_SPEC: LangSpec = LangSpec {
+    // A constructor's statements sit under `constructor_body`, not `block`.
+    bodies: &["block", "constructor_body"],
+    references: &["identifier"],
+    // A `formal_parameter`'s name is bound by the signature, so it is
+    // collected through `parameter_lists` rather than listed here.
+    declarations: &[
+        ("variable_declarator", "name"),
+        ("enhanced_for_statement", "name"),
+    ],
+    parameter_lists: &["formal_parameters", "inferred_parameters"],
+    conditions: &[
+        ("if_statement", "condition"),
+        ("while_statement", "condition"),
+        ("do_statement", "condition"),
+        ("for_statement", "condition"),
+        ("enhanced_for_statement", "value"),
+        ("switch_expression", "condition"),
+    ],
+};
+
 const JS_SPEC: LangSpec = LangSpec {
     bodies: &["statement_block"],
     references: &[
@@ -374,6 +395,12 @@ impl WorkingMemory for RustCode {
 impl WorkingMemory for PythonCode {
     fn compute_space(node: &Node, code: &[u8], stats: &mut Stats) {
         compute_space::<Self>(&PYTHON_SPEC, node, code, stats);
+    }
+}
+
+impl WorkingMemory for JavaCode {
+    fn compute_space(node: &Node, code: &[u8], stats: &mut Stats) {
+        compute_space::<Self>(&JAVA_SPEC, node, code, stats);
     }
 }
 

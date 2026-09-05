@@ -167,6 +167,19 @@ impl Cyclomatic for TsxCode {
     }
 }
 
+impl Cyclomatic for JavaCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        use Java::*;
+
+        match node.kind_id().into() {
+            If | For | While | Case | Catch | TernaryExpression | AMPAMP | PIPEPIPE => {
+                stats.cyclomatic += 1.;
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Cyclomatic for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         use Rust::*;
@@ -257,6 +270,141 @@ mod tests {
                       "average": 2.5,
                       "min": 1.0,
                       "max": 4.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_simple_class() {
+        check_metrics::<JavaParser>(
+            "
+            public class Example { // +2 (+1 unit space)
+                int a = 10;
+                boolean b = (a > 5) ? true : false; // +1
+                boolean c = b && true; // +1
+
+                public void m1() { // +1
+                    if (a % 2 == 0) { // +1
+                        b = b || c; // +1
+                    }
+                }
+                public void m2() { // +1
+                    while (a > 3) { // +1
+                        m1();
+                        a--;
+                    }
+                }
+            }",
+            "foo.java",
+            |metric| {
+                // nspace = 4 (unit, class and 2 methods)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 9.0,
+                      "average": 2.25,
+                      "min": 1.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_real_class() {
+        check_metrics::<JavaParser>(
+            "
+            public class Matrix { // +2 (+1 unit space)
+                private int[][] m = new int[5][5];
+
+                public void init() { // +1
+                    for (int i = 0; i < m.length; i++) { // +1
+                        for (int j = 0; j < m[i].length; j++) { // +1
+                            m[i][j] = i * j;
+                        }
+                    }
+                }
+                public int compute(int i, int j) { // +1
+                    try {
+                        return m[i][j] / m[j][i];
+                    } catch (ArithmeticException e) { // +1
+                        return -1;
+                    } catch (ArrayIndexOutOfBoundsException e) { // +1
+                        return -2;
+                    }
+                }
+                public void print(int result) { // +1
+                    switch (result) {
+                        case -1: // +1
+                            System.out.println(\"Division by zero\");
+                            break;
+                        case -2: // +1
+                            System.out.println(\"Wrong index number\");
+                            break;
+                        default:
+                            System.out.println(\"The result is \" + result);
+                    }
+                }
+            }",
+            "foo.java",
+            |metric| {
+                // nspace = 5 (unit, class and 3 methods)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 11.0,
+                      "average": 2.2,
+                      "min": 1.0,
+                      "max": 3.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_anonymous_class() {
+        check_metrics::<JavaParser>(
+            "
+            abstract class A { // +2 (+1 unit space)
+                public abstract boolean m1(int n); // +1
+                public abstract boolean m2(int n); // +1
+            }
+            public class B { // +1
+
+                public void test() { // +1
+                    A a = new A() {
+                        public boolean m1(int n) { // +1
+                            if (n % 2 == 0) { // +1
+                                return true;
+                            }
+                            return false;
+                        }
+                        public boolean m2(int n) { // +1
+                            if (n % 5 == 0) { // +1
+                                return true;
+                            }
+                            return false;
+                        }
+                    };
+                }
+            }",
+            "foo.java",
+            |metric| {
+                // nspace = 8 (unit, 2 classes and 5 methods)
+                insta::assert_json_snapshot!(
+                    metric.cyclomatic,
+                    @r###"
+                    {
+                      "sum": 10.0,
+                      "average": 1.25,
+                      "min": 1.0,
+                      "max": 2.0
                     }"###
                 );
             },

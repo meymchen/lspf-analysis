@@ -692,6 +692,45 @@ impl Loc for TsxCode {
     }
 }
 
+impl Loc for JavaCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        use Java::*;
+
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+        let kind_id: Java = node.kind_id().into();
+        // LLOC in Java is counted for statements only
+        // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/expressions.html
+        match kind_id {
+            Program => {}
+            LineComment | BlockComment => {
+                add_cloc_lines(stats, start, end);
+            }
+            AssertStatement | BreakStatement | ContinueStatement | DoStatement
+            | EnhancedForStatement | ExpressionStatement | ForStatement | IfStatement
+            | ReturnStatement | SwitchExpression | ThrowStatement | TryStatement
+            | WhileStatement => {
+                stats.lloc.logical_lines += 1;
+            }
+            LocalVariableDeclaration => {
+                if node.count_specific_ancestors::<JavaParser>(
+                    |node| node.kind_id() == ForStatement,
+                    |node| node.kind_id() == Block,
+                ) == 0
+                {
+                    // The initializer, condition, and increment in a for loop are expressions.
+                    // Don't count the variable declaration if in a ForStatement.
+                    // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/for.html
+                    stats.lloc.logical_lines += 1;
+                }
+            }
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
 impl Loc for RustCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
         use Rust::*;
@@ -1917,6 +1956,838 @@ mod tests {
                       "ploc_max": 5.0,
                       "lloc_min": 5.0,
                       "lloc_max": 5.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_comments() {
+        check_metrics::<JavaParser>(
+            "for (int i = 0; i < 100; i++) { \
+               // Print hello
+               System.out.println(\"hello\"); \
+               // Print world
+               System.out.println(\"hello\"); \
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 3.0,
+                      "ploc": 3.0,
+                      "lloc": 3.0,
+                      "cloc": 2.0,
+                      "blank": 0.0,
+                      "sloc_average": 3.0,
+                      "ploc_average": 3.0,
+                      "lloc_average": 3.0,
+                      "cloc_average": 2.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 3.0,
+                      "sloc_max": 3.0,
+                      "cloc_min": 2.0,
+                      "cloc_max": 2.0,
+                      "ploc_min": 3.0,
+                      "ploc_max": 3.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_blank() {
+        check_metrics::<JavaParser>(
+            "int x = 1;
+
+
+            int y = 2;",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 4.0,
+                      "ploc": 2.0,
+                      "lloc": 2.0,
+                      "cloc": 0.0,
+                      "blank": 2.0,
+                      "sloc_average": 4.0,
+                      "ploc_average": 2.0,
+                      "lloc_average": 2.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 2.0,
+                      "sloc_min": 4.0,
+                      "sloc_max": 4.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 2.0,
+                      "ploc_max": 2.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 2.0,
+                      "blank_max": 2.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_sloc() {
+        check_metrics::<JavaParser>(
+            "for (int i = 0; i < 100; i++) {
+               System.out.println(i);
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 3.0,
+                      "ploc": 3.0,
+                      "lloc": 2.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 3.0,
+                      "ploc_average": 3.0,
+                      "lloc_average": 2.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 3.0,
+                      "sloc_max": 3.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 3.0,
+                      "ploc_max": 3.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_module_sloc() {
+        check_metrics::<JavaParser>(
+            "module helloworld{
+              exports com.test;
+            }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 3.0,
+                      "ploc": 3.0,
+                      "lloc": 0.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 3.0,
+                      "ploc_average": 3.0,
+                      "lloc_average": 0.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 3.0,
+                      "sloc_max": 3.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 3.0,
+                      "ploc_max": 3.0,
+                      "lloc_min": 0.0,
+                      "lloc_max": 0.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_single_ploc() {
+        check_metrics::<JavaParser>("int x = 1;", "foo.java", |metric| {
+            // Spaces: 1
+            insta::assert_json_snapshot!(
+                metric.loc,
+                @r###"
+                    {
+                      "sloc": 1.0,
+                      "ploc": 1.0,
+                      "lloc": 1.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 1.0,
+                      "ploc_average": 1.0,
+                      "lloc_average": 1.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 1.0,
+                      "sloc_max": 1.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 1.0,
+                      "ploc_max": 1.0,
+                      "lloc_min": 1.0,
+                      "lloc_max": 1.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn java_simple_ploc() {
+        check_metrics::<JavaParser>(
+            "for (int i = 0; i < 100; i = i++) {
+               System.out.println(i);
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 3.0,
+                      "ploc": 3.0,
+                      "lloc": 2.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 3.0,
+                      "ploc_average": 3.0,
+                      "lloc_average": 2.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 3.0,
+                      "sloc_max": 3.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 3.0,
+                      "ploc_max": 3.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_multi_ploc() {
+        check_metrics::<JavaParser>(
+            "int x = 1;
+            for (int i = 0; i < 100; i++) {
+               System.out.println(i);
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 4.0,
+                      "ploc": 4.0,
+                      "lloc": 3.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 4.0,
+                      "ploc_average": 4.0,
+                      "lloc_average": 3.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 4.0,
+                      "sloc_max": 4.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 4.0,
+                      "ploc_max": 4.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_single_statement_lloc() {
+        check_metrics::<JavaParser>("int max = 10;", "foo.java", |metric| {
+            // Spaces: 1
+            insta::assert_json_snapshot!(
+                metric.loc,
+                @r###"
+                    {
+                      "sloc": 1.0,
+                      "ploc": 1.0,
+                      "lloc": 1.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 1.0,
+                      "ploc_average": 1.0,
+                      "lloc_average": 1.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 1.0,
+                      "sloc_max": 1.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 1.0,
+                      "ploc_max": 1.0,
+                      "lloc_min": 1.0,
+                      "lloc_max": 1.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+            );
+        });
+    }
+
+    #[test]
+    fn java_for_lloc() {
+        check_metrics::<JavaParser>(
+            "for (int i = 0; i < 100; i++) { // + 1
+               System.out.println(i); // + 1
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 3.0,
+                      "ploc": 3.0,
+                      "lloc": 2.0,
+                      "cloc": 2.0,
+                      "blank": 0.0,
+                      "sloc_average": 3.0,
+                      "ploc_average": 3.0,
+                      "lloc_average": 2.0,
+                      "cloc_average": 2.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 3.0,
+                      "sloc_max": 3.0,
+                      "cloc_min": 2.0,
+                      "cloc_max": 2.0,
+                      "ploc_min": 3.0,
+                      "ploc_max": 3.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_foreach_lloc() {
+        check_metrics::<JavaParser>(
+            "
+            int arr[]={12,13,14,44}; // +1
+            for (int i:arr) { // +1
+               System.out.println(i); // +1
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 4.0,
+                      "ploc": 4.0,
+                      "lloc": 3.0,
+                      "cloc": 3.0,
+                      "blank": 0.0,
+                      "sloc_average": 4.0,
+                      "ploc_average": 4.0,
+                      "lloc_average": 3.0,
+                      "cloc_average": 3.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 4.0,
+                      "sloc_max": 4.0,
+                      "cloc_min": 3.0,
+                      "cloc_max": 3.0,
+                      "ploc_min": 4.0,
+                      "ploc_max": 4.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_while_lloc() {
+        check_metrics::<JavaParser>(
+            "
+            int i=0; // +1
+            while(i < 10) { // +1
+                i++; // +1
+                System.out.println(i); // +1
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 5.0,
+                      "ploc": 5.0,
+                      "lloc": 4.0,
+                      "cloc": 4.0,
+                      "blank": 0.0,
+                      "sloc_average": 5.0,
+                      "ploc_average": 5.0,
+                      "lloc_average": 4.0,
+                      "cloc_average": 4.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 5.0,
+                      "sloc_max": 5.0,
+                      "cloc_min": 4.0,
+                      "cloc_max": 4.0,
+                      "ploc_min": 5.0,
+                      "ploc_max": 5.0,
+                      "lloc_min": 4.0,
+                      "lloc_max": 4.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_do_while_lloc() {
+        check_metrics::<JavaParser>(
+            "
+            int i=0; // +1
+            do { // +1
+                i++; // +1
+                System.out.println(i); // +1
+             } while(i < 10)",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 5.0,
+                      "ploc": 5.0,
+                      "lloc": 4.0,
+                      "cloc": 4.0,
+                      "blank": 0.0,
+                      "sloc_average": 5.0,
+                      "ploc_average": 5.0,
+                      "lloc_average": 4.0,
+                      "cloc_average": 4.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 5.0,
+                      "sloc_max": 5.0,
+                      "cloc_min": 4.0,
+                      "cloc_max": 4.0,
+                      "ploc_min": 5.0,
+                      "ploc_max": 5.0,
+                      "lloc_min": 4.0,
+                      "lloc_max": 4.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_switch_lloc() {
+        check_metrics::<JavaParser>(
+            "switch(grade) { // +1
+                case 'A' :
+                   System.out.println(\"Pass with distinction\"); // +1
+                   break; // +1
+                case 'B' :
+                case 'C' :
+                   System.out.println(\"Pass\"); // +1
+                   break; // +1
+                case 'D' :
+                   System.out.println(\"At risk\"); // +1
+                case 'F' :
+                   System.out.println(\"Fail\"); // +1
+                   break; // +1
+                default :
+                   System.out.println(\"Invalid grade\"); // +1
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 16.0,
+                      "ploc": 16.0,
+                      "lloc": 9.0,
+                      "cloc": 9.0,
+                      "blank": 0.0,
+                      "sloc_average": 16.0,
+                      "ploc_average": 16.0,
+                      "lloc_average": 9.0,
+                      "cloc_average": 9.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 16.0,
+                      "sloc_max": 16.0,
+                      "cloc_min": 9.0,
+                      "cloc_max": 9.0,
+                      "ploc_min": 16.0,
+                      "ploc_max": 16.0,
+                      "lloc_min": 9.0,
+                      "lloc_max": 9.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_continue_lloc() {
+        check_metrics::<JavaParser>(
+            "int max = 10; // +1
+
+            for (int i = 0; i < max; i++) { // +1
+                if(i % 2 == 0) { continue;} + 2
+                System.out.println(i); // +1
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 6.0,
+                      "ploc": 5.0,
+                      "lloc": 5.0,
+                      "cloc": 3.0,
+                      "blank": 1.0,
+                      "sloc_average": 6.0,
+                      "ploc_average": 5.0,
+                      "lloc_average": 5.0,
+                      "cloc_average": 3.0,
+                      "blank_average": 1.0,
+                      "sloc_min": 6.0,
+                      "sloc_max": 6.0,
+                      "cloc_min": 3.0,
+                      "cloc_max": 3.0,
+                      "ploc_min": 5.0,
+                      "ploc_max": 5.0,
+                      "lloc_min": 5.0,
+                      "lloc_max": 5.0,
+                      "blank_min": 1.0,
+                      "blank_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_try_lloc() {
+        check_metrics::<JavaParser>(
+            "try { // +1
+                int[] myNumbers = {1, 2, 3}; // +1
+                System.out.println(myNumbers[10]); // +1
+              } catch (Exception e) {
+                System.out.println(e.getMessage()); // +1
+                throw e; // +1
+              }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 7.0,
+                      "ploc": 7.0,
+                      "lloc": 5.0,
+                      "cloc": 5.0,
+                      "blank": 0.0,
+                      "sloc_average": 7.0,
+                      "ploc_average": 7.0,
+                      "lloc_average": 5.0,
+                      "cloc_average": 5.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 7.0,
+                      "sloc_max": 7.0,
+                      "cloc_min": 5.0,
+                      "cloc_max": 5.0,
+                      "ploc_min": 7.0,
+                      "ploc_max": 7.0,
+                      "lloc_min": 5.0,
+                      "lloc_max": 5.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_class_loc() {
+        check_metrics::<JavaParser>(
+            "
+            public class Person {
+              private String name;
+              public Person(String name){
+                this.name = name; // +1
+              }
+              public String getName() {
+                return name; // +1
+              }
+            }",
+            "foo.java",
+            |metric| {
+                // Spaces: 4
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 9.0,
+                      "ploc": 9.0,
+                      "lloc": 2.0,
+                      "cloc": 2.0,
+                      "blank": 0.0,
+                      "sloc_average": 2.25,
+                      "ploc_average": 2.25,
+                      "lloc_average": 0.5,
+                      "cloc_average": 0.5,
+                      "blank_average": 0.0,
+                      "sloc_min": 9.0,
+                      "sloc_max": 9.0,
+                      "cloc_min": 2.0,
+                      "cloc_max": 2.0,
+                      "ploc_min": 9.0,
+                      "ploc_max": 9.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_expressions_lloc() {
+        check_metrics::<JavaParser>(
+            "int x = 10;                                                            // +1 local var declaration
+            x=+89;                                                                  // +1 expression statement
+            int y = x * 2;                                                          // +1 local var declaration
+            IntFunction double = (n) -> n*2;                                        // +1 local var declaration
+            int y2 = double(x);                                                     // +1 local var declaration
+            System.out.println(\"double \" + x + \" = \" + y2);                     // +1 expression statement
+            String message = (x % 2) == 0 ? \"Evenly done.\" : \"Oddly done.\";     // +1 local var declaration
+            Object done = (Runnable) () -> { System.out.println(\"Done!\"); };      // +2 local var declaration + expression statement
+            String s = \"string\";                                                  // +1 local var declaration
+            boolean isS = (s instanceof String);                                    // +1 local var declaration
+            done.run();                                                             // +1 expression statement
+            ",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 11.0,
+                      "ploc": 11.0,
+                      "lloc": 12.0,
+                      "cloc": 11.0,
+                      "blank": 0.0,
+                      "sloc_average": 11.0,
+                      "ploc_average": 11.0,
+                      "lloc_average": 12.0,
+                      "cloc_average": 11.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 11.0,
+                      "sloc_max": 11.0,
+                      "cloc_min": 11.0,
+                      "cloc_max": 11.0,
+                      "ploc_min": 11.0,
+                      "ploc_max": 11.0,
+                      "lloc_min": 12.0,
+                      "lloc_max": 12.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_statement_inline_loc() {
+        check_metrics::<JavaParser>(
+            "for (int i = 0; i < 100; i++) { System.out.println(\"hello\"); }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 1.0,
+                      "ploc": 1.0,
+                      "lloc": 2.0,
+                      "cloc": 0.0,
+                      "blank": 0.0,
+                      "sloc_average": 1.0,
+                      "ploc_average": 1.0,
+                      "lloc_average": 2.0,
+                      "cloc_average": 0.0,
+                      "blank_average": 0.0,
+                      "sloc_min": 1.0,
+                      "sloc_max": 1.0,
+                      "cloc_min": 0.0,
+                      "cloc_max": 0.0,
+                      "ploc_min": 1.0,
+                      "ploc_max": 1.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
+                      "blank_min": 0.0,
+                      "blank_max": 0.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_general_loc() {
+        check_metrics::<JavaParser>(
+            "int max = 100;
+
+            /*
+              Loop through and print
+                from: 0
+                to: max
+            */
+            for (int i = 0; i < max; i++) {
+               // Print the value
+               System.out.println(i);
+             }",
+            "foo.java",
+            |metric| {
+                // Spaces: 1
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 11.0,
+                      "ploc": 4.0,
+                      "lloc": 3.0,
+                      "cloc": 6.0,
+                      "blank": 1.0,
+                      "sloc_average": 11.0,
+                      "ploc_average": 4.0,
+                      "lloc_average": 3.0,
+                      "cloc_average": 6.0,
+                      "blank_average": 1.0,
+                      "sloc_min": 11.0,
+                      "sloc_max": 11.0,
+                      "cloc_min": 6.0,
+                      "cloc_max": 6.0,
+                      "ploc_min": 4.0,
+                      "ploc_max": 4.0,
+                      "lloc_min": 3.0,
+                      "lloc_max": 3.0,
+                      "blank_min": 1.0,
+                      "blank_max": 1.0
+                    }"###
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn java_main_class_loc() {
+        check_metrics::<JavaParser>(
+            "package com.company;
+             /**
+             * The HelloWorldApp class implements an application that
+             * simply prints \"Hello World!\" to standard output.
+             */
+
+            class HelloWorldApp {
+              public void main(String[] args) {
+                String message = args.length == 0 ? \"Hello empty world\" : \"Hello world\"; // +1 lloc : 1 var assignment
+                System.out.println(message); // Display the string. +1 lloc
+              }
+            }",
+            "foo.java",
+            |metric| {
+                // Spaces: 3
+                insta::assert_json_snapshot!(
+                    metric.loc,
+                    @r###"
+                    {
+                      "sloc": 12.0,
+                      "ploc": 7.0,
+                      "lloc": 2.0,
+                      "cloc": 6.0,
+                      "blank": 1.0,
+                      "sloc_average": 4.0,
+                      "ploc_average": 2.3333333333333335,
+                      "lloc_average": 0.6666666666666666,
+                      "cloc_average": 2.0,
+                      "blank_average": 0.3333333333333333,
+                      "sloc_min": 6.0,
+                      "sloc_max": 6.0,
+                      "cloc_min": 2.0,
+                      "cloc_max": 2.0,
+                      "ploc_min": 6.0,
+                      "ploc_max": 6.0,
+                      "lloc_min": 2.0,
+                      "lloc_max": 2.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###

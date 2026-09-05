@@ -198,16 +198,22 @@ async fn hover(
     };
     let encoding = ctx.documents().position_encoding();
     let position = params.text_document_position_params.position;
-    let Some((function, range)) =
-        hover::function_at(&analyzed.report, &analyzed.text, position, encoding)
-    else {
+    // A function first: a method's name sits inside its class's span, and
+    // it is the narrower answer to the same question.
+    let rendered = hover::function_at(&analyzed.report, &analyzed.text, position, encoding)
+        .map(|(function, range)| (hover::render(function, settings.locale()), range))
+        .or_else(|| {
+            hover::class_at(&analyzed.report, &analyzed.text, position, encoding)
+                .map(|(class, range)| (hover::render_class(class, settings.locale()), range))
+        });
+    let Some((value, range)) = rendered else {
         return Ok(None);
     };
 
     Ok(Some(Hover {
         contents: Contents::MarkupContent(MarkupContent {
             kind: MarkupKind::Markdown,
-            value: hover::render(function, settings.locale()),
+            value,
         }),
         // The name, and nothing else: the editor highlights this while the
         // hover is up, and other providers contribute their own.

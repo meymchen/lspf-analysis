@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-/// How many pillars the quality score blends.
+/// How many pillars a *function's* quality score blends.
+///
+/// A class is scored on one pillar of its own and does not go through this
+/// blend; see [`HealthConfig::wmc_threshold`] and the
+/// [module docs](crate::health).
 pub const PILLARS: usize = 4;
 
 /// Where each measure's score crosses 50%, and where a quality score stops
@@ -36,6 +40,16 @@ pub struct HealthConfig {
     /// bound for a unit's interface; 4 is where the "long parameter list"
     /// smell is conventionally called.
     pub parameters_threshold: f64,
+    /// Weighted methods per class scoring 50%. Where a benchmark of Java
+    /// systems puts the boundary between a common class and an uncommon one.
+    pub wmc_threshold: f64,
+    /// Public methods per class scoring 50%. The same benchmark's boundary
+    /// for methods per class; a class's public methods are a subset of them,
+    /// so this is a conservative bound.
+    pub public_methods_threshold: f64,
+    /// Public attributes per class scoring 50%. The same benchmark's
+    /// boundary for fields per class, read the same conservative way.
+    pub public_attributes_threshold: f64,
     /// How the pillars are weighted against each other.
     pub weights: Weights,
     /// Quality below this is reported as a warning.
@@ -55,6 +69,9 @@ impl Default for HealthConfig {
             working_memory_threshold: 8.0,
             halstead_difficulty_threshold: 12.0,
             parameters_threshold: 4.0,
+            wmc_threshold: 34.0,
+            public_methods_threshold: 14.0,
+            public_attributes_threshold: 8.0,
             weights: Weights::default(),
             quality_warn: 25.0,
             quality_error: 10.0,
@@ -72,6 +89,10 @@ impl Default for HealthConfig {
 /// `interface` starts at half the others: a wide signature is a real signal
 /// but a narrower one than the three that describe a function's body, and
 /// giving it a full share would let parameter count alone decide a verdict.
+///
+/// The first four weight the pillars of a *function's* score. `class_design`
+/// is not one of them: it weighs a file's classes against its functions, and
+/// only in files where classes were actually scored.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Weights {
@@ -83,6 +104,11 @@ pub struct Weights {
     pub working_memory: f64,
     /// Interface: parameter count.
     pub interface: f64,
+    /// How much a file's class scores count against its function scores.
+    ///
+    /// Half a share, like `interface`: a class's shape matters, but the
+    /// functions inside it are what a reader actually works through.
+    pub class_design: f64,
 }
 
 impl Default for Weights {
@@ -92,6 +118,7 @@ impl Default for Weights {
             length: 1.0,
             working_memory: 1.0,
             interface: 0.5,
+            class_design: 0.5,
         }
     }
 }
@@ -139,6 +166,7 @@ mod tests {
             length: 1.0,
             working_memory: 0.5,
             interface: 0.5,
+            ..Weights::default()
         }
         .normalized();
         assert!((weights[0] - 0.5).abs() < 1e-12);
@@ -153,18 +181,21 @@ mod tests {
                 length: 0.0,
                 working_memory: 0.0,
                 interface: 0.0,
+                ..Weights::default()
             },
             Weights {
                 complexity: -1.0,
                 length: 1.0,
                 working_memory: 1.0,
                 interface: 1.0,
+                ..Weights::default()
             },
             Weights {
                 complexity: f64::NAN,
                 length: 1.0,
                 working_memory: 1.0,
                 interface: 1.0,
+                ..Weights::default()
             },
         ] {
             let weights = weights.normalized();

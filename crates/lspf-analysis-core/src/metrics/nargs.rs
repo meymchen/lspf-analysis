@@ -212,6 +212,7 @@ where
 
 implement_metric_trait!(
     [NArgs],
+    JavaCode,
     PythonCode,
     JavascriptCode,
     TypescriptCode,

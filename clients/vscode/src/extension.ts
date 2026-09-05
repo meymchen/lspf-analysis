@@ -67,6 +67,7 @@ const ENABLED_COMMANDS = [
  * would start the server for a document it cannot parse.
  */
 const LANGUAGES = [
+    'java',
     'javascript',
     'javascriptreact',
     'python',

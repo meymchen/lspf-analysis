@@ -102,6 +102,7 @@ fn zh_cn(source: &str) -> Option<&'static str> {
         "size" => "规模",
         "vocabulary load" => "词汇负担",
         "interface" => "接口",
+        "class design" => "类设计",
 
         // The metrics behind them.
         "cognitive complexity" => "认知复杂度",
@@ -110,6 +111,9 @@ fn zh_cn(source: &str) -> Option<&'static str> {
         "working memory" => "工作记忆",
         "Halstead difficulty" => "Halstead 难度",
         "parameters" => "参数个数",
+        "weighted methods" => "加权方法数",
+        "public methods" => "公有方法数",
+        "public attributes" => "公有属性数",
 
         // The bands a quality score falls in.
         "excellent" => "优秀",
@@ -136,6 +140,7 @@ fn zh_cn(source: &str) -> Option<&'static str> {
             "函数 `{0}`：质量 {1}%（{2}），最弱支柱 {3} —— {4}"
         }
         "function `{0}`: {1} {2}" => "函数 `{0}`：{2} {1}",
+        "class `{0}`: quality {1}% ({2}) — {3}" => "类 `{0}`：质量 {1}%（{2}）—— {3}",
         "file quality {0}% ({1}) across {2} function" => "文件质量 {0}%（{1}），共 {2} 个函数",
         "file quality {0}% ({1}) across {2} functions" => "文件质量 {0}%（{1}），共 {2} 个函数",
 

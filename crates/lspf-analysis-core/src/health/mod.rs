@@ -54,6 +54,35 @@
 //! others: a wide signature is a real signal, but a narrower one than the
 //! three pillars that describe what a function does.
 //!
+//! # The class pillar
+//!
+//! A class is not a function and none of the four pillars is defined for
+//! it, so a class is scored on one pillar of its own.
+//!
+//! | Pillar | Measures | Default threshold | Why |
+//! | --- | --- | --- | --- |
+//! | Class design | weighted methods per class | 34 | [\[16\]][16] |
+//! | | public methods | 14 | [\[16\]][16] [\[17\]][17] |
+//! | | public attributes | 8 | [\[16\]][16] [\[17\]][17] |
+//!
+//! The thresholds come from one benchmark catalogue derived from the 111
+//! Java systems of the Qualitas.class Corpus, which splits each metric into
+//! common, casual and uncommon ranges [\[16\]][16]; the threshold here is
+//! where uncommon starts — WMC above 34, more than 14 methods, more than 8
+//! fields. Public methods and public attributes are subsets of the methods
+//! and fields the catalogue counts, so reading its boundaries for them is
+//! deliberately conservative;
+//! how much of a class is public is the older question the two metrics were
+//! defined to answer [\[17\]][17]. The same catalogue puts the parameter
+//! boundaries at 2 and 4, which is where the interface pillar already sits.
+//!
+//! A class is only scored where the engine actually computes these metrics,
+//! which today means Java. A `class` space in a language whose `Wmc`, `Npm`
+//! and `Npa` implementations are no-ops would score a constant 100 and say
+//! nothing, so it is left out of the report entirely — and with it out, a
+//! file in that language scores exactly what it scored before classes were
+//! scored at all.
+//!
 //! # The formula
 //!
 //! Each measure is scored on its own before anything is blended, so a
@@ -78,6 +107,17 @@
 //! pillar should drag the whole score down: a 200-statement function is hard
 //! to work with no matter how flat its control flow is.
 //!
+//! A class scores at its single pillar, $Q_C = s_{\text{class design}}$. A
+//! file blends its functions with its classes the same geometric way,
+//!
+//! $$ Q_F = Q_{\text{functions}}^{\,1-w} \cdot Q_{\text{classes}}^{\,w},
+//!    \qquad w = \frac{w_{\text{class}}}{1 + w_{\text{class}}} $$
+//!
+//! where $Q_{\text{functions}}$ weights each function by its length and
+//! $Q_{\text{classes}}$ weights each class by how many methods it defines.
+//! With no scored classes the second factor is absent and $Q_F$ is the
+//! function quality untouched.
+//!
 //! # What is deliberately left out
 //!
 //! The engine computes more than this module scores. Each omission is a
@@ -97,14 +137,14 @@
 //!   languages handle. It is defended and attacked in style guides, but a
 //!   search of the literature turns up no controlled study relating exit
 //!   count to defects or to comprehension.
-//! - **Number of methods, WMC, NPM, NPA.** Properties of a class, not of a
-//!   function, and only function spaces are scored. The last three are not
-//!   computed for any language this fork supports.
-//! - **ABC.** Its `compute` is a no-op for every supported language, so it
-//!   would contribute a constant zero.
-//!
-//! Adding Java, Kotlin or C++ would make the class-level metrics real and
-//! worth a pillar of their own; until then they would score nothing.
+//! - **Number of methods.** A count on its own, without the complexity
+//!   weighting that makes WMC say something about how much a class does.
+//!   It is carried on the class report as the weight a file uses to
+//!   balance its classes against each other, and not scored.
+//! - **ABC.** Computed for Java and for no other grammar this fork carries.
+//!   Scoring it would add a second size measure that only one language has,
+//!   which would make a Java score mean something different from every
+//!   other language's. It is reported, and hidden where it is not computed.
 //!
 //! # References
 //!
@@ -162,6 +202,17 @@
 //!     quality assessment: A systematic literature review.* Journal of
 //!     Systems and Software 195, 2023, 111515.
 //!     <https://doi.org/10.1016/j.jss.2022.111515>
+//! 16. T. Filó, M. Bigonha, K. Ferreira. *A Catalogue of Thresholds for
+//!     Object-Oriented Software Metrics.* SOFTENG 2015, 48–55.
+//!     <https://personales.upv.es/thinkmind/dl/conferences/softeng/softeng_2015/softeng_2015_3_10_55070.pdf>
+//!     — evaluated for bad-smell detection and fault prediction in
+//!     T. Filó, M. Bigonha, K. Ferreira, *Evaluating Thresholds for
+//!     Object-Oriented Software Metrics*, JBCS, 2024.
+//!     <https://journals-sol.sbc.org.br/index.php/jbcs/article/view/3373>
+//! 17. K. Ferreira, M. Bigonha, R. Bigonha, L. Mendes, H. Almeida.
+//!     *Identifying thresholds for object-oriented software metrics.*
+//!     Journal of Systems and Software 85(2), 2012, 244–257.
+//!     <https://doi.org/10.1016/j.jss.2011.05.044>
 //!
 //! [1]: https://doi.org/10.1145/3194164.3194186
 //! [2]: https://doi.org/10.1145/3382494.3410636
@@ -178,11 +229,14 @@
 //! [13]: https://doi.org/10.1109/32.935855
 //! [14]: https://doi.org/10.1145/2372251.2372269
 //! [15]: https://doi.org/10.1016/j.jss.2022.111515
+//! [16]: https://personales.upv.es/thinkmind/dl/conferences/softeng/softeng_2015/softeng_2015_3_10_55070.pdf
+//! [17]: https://doi.org/10.1016/j.jss.2011.05.044
 
 mod config;
 mod score;
 
 pub use config::{HealthConfig, PILLARS, Weights};
 pub use score::{
-    FileHealth, FunctionHealth, Grade, Measure, Pillar, RepoHealth, Scores, file_health,
+    ClassHealth, ClassScores, FileHealth, FunctionHealth, Grade, Measure, Pillar, RepoHealth,
+    Scores, file_health,
 };

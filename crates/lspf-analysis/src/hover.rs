@@ -1,10 +1,10 @@
-//! Rendering a function's health for hover.
+//! Rendering a function's or a class's health for hover.
 
 use lspf::PositionEncoding;
 use lspf::types::{Position, Range};
-use lspf_analysis_core::health::{FileHealth, FunctionHealth, Grade};
+use lspf_analysis_core::health::{ClassHealth, FileHealth, FunctionHealth, Grade, Pillar};
 
-use crate::document::name_range;
+use crate::document::declaration_range;
 use crate::i18n::Locale;
 
 /// Finds the function whose declared name is under `position`.
@@ -13,6 +13,11 @@ use crate::i18n::Locale;
 /// so they are offered only on the name itself. Answering for every line of
 /// a function would put a table in front of the reader whenever they asked
 /// about a local variable, which is not what they asked.
+///
+/// The candidates are the spaces whose lines enclose `position`, rather than
+/// only those starting on it: a Java method's space starts at its first
+/// annotation, so `@Override` is the space's line and the name is on the
+/// next one. [`declaration_range`] finds which line actually declares it.
 ///
 /// Functions can nest on one line, so the tightest span wins.
 pub fn function_at<'a>(
@@ -23,13 +28,22 @@ pub fn function_at<'a>(
 ) -> Option<(&'a FunctionHealth, Range)> {
     let line = position.line as usize + 1;
     let mut found: Option<(&FunctionHealth, Range)> = None;
-    for function in report.functions.iter().filter(|f| f.start_line == line) {
+    for function in report
+        .functions
+        .iter()
+        .filter(|f| f.start_line <= line && line <= f.end_line)
+    {
         let Some(name) = function.name.as_deref() else {
             continue;
         };
-        let Some(range) = name_range(text, line, name, encoding) else {
+        let Some((declared_on, range)) =
+            declaration_range(text, function.start_line, function.end_line, name, encoding)
+        else {
             continue;
         };
+        if declared_on != line {
+            continue;
+        }
         if position.character < range.start.character || position.character >= range.end.character {
             continue;
         }
@@ -41,6 +55,32 @@ pub fn function_at<'a>(
         }
     }
     found
+}
+
+/// Finds the class or interface whose declared name is under `position`.
+///
+/// The same rule as [`function_at`]: the name, and nowhere else. Classes do
+/// not nest on one line the way functions do, so the first match wins.
+pub fn class_at<'a>(
+    report: &'a FileHealth,
+    text: &str,
+    position: Position,
+    encoding: PositionEncoding,
+) -> Option<(&'a ClassHealth, Range)> {
+    let line = position.line as usize + 1;
+    report
+        .classes
+        .iter()
+        .filter(|class| class.start_line <= line && line <= class.end_line)
+        .find_map(|class| {
+            let name = class.name.as_deref()?;
+            let (declared_on, range) =
+                declaration_range(text, class.start_line, class.end_line, name, encoding)?;
+            (declared_on == line
+                && position.character >= range.start.character
+                && position.character < range.end.character)
+                .then_some((class, range))
+        })
 }
 
 /// How many cells a score bar is drawn with.
@@ -73,7 +113,39 @@ fn bar(score: f64) -> String {
 /// syntax — because every LSP client renders this. A client that can do
 /// more is free to add to it; the VS Code extension appends its own footer.
 pub fn render(function: &FunctionHealth, locale: Locale) -> String {
-    let worst = function.scores.worst_pillar();
+    render_pillars(
+        function.display_name(),
+        function.quality,
+        function.grade,
+        &function.scores.pillars(),
+        function.scores.worst_pillar(),
+        locale,
+    )
+}
+
+/// Renders a class's numbers the same way, from its one pillar.
+pub fn render_class(class: &ClassHealth, locale: Locale) -> String {
+    let pillar = &class.scores.class_design;
+    render_pillars(
+        class.display_name(),
+        class.quality,
+        class.grade,
+        &[pillar],
+        pillar,
+        locale,
+    )
+}
+
+/// The shared body: a heading, a bar, one table row per measure, and a
+/// sentence naming the measure that set the verdict.
+fn render_pillars(
+    name: &str,
+    quality: f64,
+    grade: Grade,
+    pillars: &[&Pillar],
+    worst: &Pillar,
+    locale: Locale,
+) -> String {
     let mut out = format!(
         "**`{name}`**  ·  {quality_label} **{quality:.0}%**  ·  {grade}\n\
          \n\
@@ -81,17 +153,15 @@ pub fn render(function: &FunctionHealth, locale: Locale) -> String {
          \n\
          | {pillar} | {metric} | {value} | {score} |\n\
          | :-- | :-- | --: | :-- |\n",
-        name = function.display_name(),
         quality_label = locale.t("quality"),
-        quality = function.quality,
-        grade = locale.t(function.grade.as_str()),
-        overall = bar(function.quality),
+        grade = locale.t(grade.as_str()),
+        overall = bar(quality),
         pillar = locale.t("pillar"),
         metric = locale.t("metric"),
         value = locale.t("value"),
         score = locale.t("score"),
     );
-    for pillar in function.scores.pillars() {
+    for pillar in pillars {
         for (index, metric) in pillar.measures.iter().enumerate() {
             out.push_str(&format!(
                 "| {label} | {metric} | {value:.0} / {threshold:.0} | {bar} {score:.0}% |\n",
@@ -330,5 +400,160 @@ fn other() -> u32 {
             1,
             "the second row of a pillar leaves its label empty:\n{markdown}"
         );
+    }
+
+    const JAVA: &str = "public class Box {
+    public int side;
+
+    public int area() {
+        return side * side;
+    }
+}
+";
+
+    fn java_report() -> FileHealth {
+        analyze(
+            LANG::Java,
+            JAVA.to_string(),
+            Path::new("Box.java"),
+            &HealthConfig::default(),
+        )
+        .unwrap()
+    }
+
+    fn class_at_position(report: &FileHealth, line: u32, character: u32) -> Option<&ClassHealth> {
+        class_at(
+            report,
+            JAVA,
+            Position::new(line - 1, character),
+            PositionEncoding::Utf16,
+        )
+        .map(|(class, _)| class)
+    }
+
+    #[test]
+    fn a_class_name_matches_its_class() {
+        let report = java_report();
+        // `public class Box`: the name starts at column 13.
+        assert_eq!(
+            class_at_position(&report, 1, 13).unwrap().name.as_deref(),
+            Some("Box")
+        );
+        assert!(
+            class_at_position(&report, 1, 0).is_none(),
+            "the `public` keyword"
+        );
+        assert!(class_at_position(&report, 4, 15).is_none(), "a method name");
+    }
+
+    #[test]
+    fn a_class_renders_its_three_measures() {
+        let report = java_report();
+        let markdown = render_class(class_at_position(&report, 1, 13).unwrap(), Locale::English);
+        assert!(markdown.contains("**`Box`**"), "{markdown}");
+        assert!(
+            markdown.contains("| class design | weighted methods |"),
+            "{markdown}"
+        );
+        assert!(markdown.contains("public methods"), "{markdown}");
+        assert!(markdown.contains("public attributes"), "{markdown}");
+        // The defaults, so a reader can see what a number is judged against.
+        assert!(markdown.contains("/ 34"), "{markdown}");
+        assert!(markdown.contains("/ 14"), "{markdown}");
+        assert!(markdown.contains("/ 8"), "{markdown}");
+    }
+
+    /// Java folds annotations and modifiers into the declaration node, so
+    /// every space here starts a line or more above its own name.
+    const ANNOTATED: &str = "@Deprecated
+public class Legacy {
+    @Override
+    @SuppressWarnings(\"unchecked\")
+    public int plain(int a, int b) {
+        return a + b;
+    }
+}
+";
+
+    fn annotated_report() -> FileHealth {
+        analyze(
+            LANG::Java,
+            ANNOTATED.to_string(),
+            Path::new("Legacy.java"),
+            &HealthConfig::default(),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn an_annotated_method_hovers_on_its_signature_line() {
+        let report = annotated_report();
+        let found = |line: u32, character: u32| {
+            function_at(
+                &report,
+                ANNOTATED,
+                Position::new(line - 1, character),
+                PositionEncoding::Utf16,
+            )
+            .map(|(function, _)| function.display_name().to_string())
+        };
+        // `    public int plain(int a, int b) {`: the name starts at column 15.
+        assert_eq!(found(5, 15).as_deref(), Some("plain"));
+        assert_eq!(found(5, 19).as_deref(), Some("plain"));
+        // The annotations above it are not the declaration.
+        assert_eq!(found(3, 4), None, "@Override");
+        assert_eq!(found(4, 4), None, "@SuppressWarnings");
+        // Nor is the rest of the signature, or the body.
+        assert_eq!(found(5, 4), None, "the `public` keyword");
+        assert_eq!(found(6, 8), None, "a line inside the body");
+    }
+
+    #[test]
+    fn an_annotated_class_hovers_on_its_declaration_line() {
+        let report = annotated_report();
+        let found = |line: u32, character: u32| {
+            class_at(
+                &report,
+                ANNOTATED,
+                Position::new(line - 1, character),
+                PositionEncoding::Utf16,
+            )
+            .map(|(class, _)| class.display_name().to_string())
+        };
+        // `public class Legacy {`: the name starts at column 13.
+        assert_eq!(found(2, 13).as_deref(), Some("Legacy"));
+        assert_eq!(found(1, 0), None, "@Deprecated");
+        assert_eq!(found(2, 0), None, "the `public` keyword");
+    }
+
+    #[test]
+    fn a_name_inside_an_annotation_does_not_stand_in_for_the_declaration() {
+        // A whole-word search would otherwise find `plain` in the
+        // annotation's string and answer on the wrong line.
+        let source = "public class C {
+    @SuppressWarnings(\"plain\")
+    public int plain(int a) {
+        return a;
+    }
+}
+";
+        let report = analyze(
+            LANG::Java,
+            source.to_string(),
+            Path::new("C.java"),
+            &HealthConfig::default(),
+        )
+        .unwrap();
+        let found = |line: u32, character: u32| {
+            function_at(
+                &report,
+                source,
+                Position::new(line - 1, character),
+                PositionEncoding::Utf16,
+            )
+            .map(|(function, _)| function.display_name().to_string())
+        };
+        assert_eq!(found(3, 15).as_deref(), Some("plain"), "the declaration");
+        assert_eq!(found(2, 23), None, "the string inside the annotation");
     }
 }

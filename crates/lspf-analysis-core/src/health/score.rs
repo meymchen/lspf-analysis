@@ -175,12 +175,58 @@ impl FunctionHealth {
     }
 }
 
+/// The one pillar behind a class's quality score.
+///
+/// A class is not a function and is not scored like one: none of the four
+/// function pillars is defined for it, and the three measures that are — the
+/// complexity it carries, and how much of itself it exposes — are all
+/// properties of its design.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct ClassScores {
+    /// How heavy the class is, and how much of it is public.
+    pub class_design: Pillar,
+}
+
+/// The health of one class or interface.
+///
+/// Only produced for languages whose engine actually computes the
+/// class-level metrics. A `class` space in a language that does not compute
+/// them would score a constant 100 and say nothing.
+#[derive(Clone, Debug, Serialize)]
+pub struct ClassHealth {
+    /// The class's name, or `None` when it could not be parsed.
+    pub name: Option<String>,
+    /// Whether this is a class or an interface.
+    pub kind: SpaceKind,
+    /// First line of the class, 1-based.
+    pub start_line: usize,
+    /// Last line of the class, 1-based.
+    pub end_line: usize,
+    /// The pillar's score, which is the class's quality.
+    pub quality: f64,
+    /// The band `quality` falls in.
+    pub grade: Grade,
+    /// How many methods the class defines, used to weight it against the
+    /// other classes of the file.
+    pub methods: f64,
+    /// The pillar behind `quality`.
+    pub scores: ClassScores,
+}
+
+impl ClassHealth {
+    /// Returns the class's name, or `<anonymous>` when it has none.
+    pub fn display_name(&self) -> &str {
+        self.name.as_deref().unwrap_or("<anonymous>")
+    }
+}
+
 /// The health of one file.
 #[derive(Clone, Debug, Serialize)]
 pub struct FileHealth {
     /// The analyzed path.
     pub path: PathBuf,
-    /// Quality across the file's functions, weighted by their length.
+    /// Quality across the file's functions, weighted by their length, and —
+    /// where the language computes class metrics — its classes.
     pub quality: f64,
     /// The band `quality` falls in.
     pub grade: Grade,
@@ -189,6 +235,9 @@ pub struct FileHealth {
     pub maintainability_index: f64,
     /// Every function in the file, in source order.
     pub functions: Vec<FunctionHealth>,
+    /// Every scored class in the file, in source order. Empty for languages
+    /// whose engine does not compute the class-level metrics.
+    pub classes: Vec<ClassHealth>,
 }
 
 impl FileHealth {
@@ -222,6 +271,9 @@ pub struct RepoHealth {
     pub files: usize,
     /// How many functions were analyzed.
     pub functions: usize,
+    /// How many classes were scored. Zero unless the sources include a
+    /// language whose engine computes the class-level metrics.
+    pub classes: usize,
     /// How many functions landed in each band.
     pub excellent: usize,
     pub good: usize,
@@ -363,6 +415,122 @@ fn collect_functions(space: &FuncSpace, config: &HealthConfig, out: &mut Vec<Fun
     }
 }
 
+/// Scores one class or interface space.
+///
+/// A class's measures come in two flavours — class and interface — because
+/// an interface's members are implicitly public and the engine counts them
+/// separately. Which set applies is the space's own kind.
+fn class_health(space: &FuncSpace, config: &HealthConfig) -> ClassHealth {
+    let metrics = &space.metrics;
+    let interface = space.kind == SpaceKind::Interface;
+    let (weighted_methods, public_methods, public_attributes, methods) = if interface {
+        (
+            metrics.wmc.interface_wmc(),
+            metrics.npm.interface_npm(),
+            metrics.npa.interface_npa(),
+            metrics.npm.interface_nm(),
+        )
+    } else {
+        (
+            metrics.wmc.class_wmc(),
+            metrics.npm.class_npm(),
+            metrics.npa.class_npa(),
+            metrics.npm.class_nm(),
+        )
+    };
+
+    let scores = ClassScores {
+        class_design: Pillar::of(
+            "class design",
+            vec![
+                measure(
+                    "weighted methods",
+                    finite(weighted_methods),
+                    config.wmc_threshold,
+                ),
+                measure(
+                    "public methods",
+                    finite(public_methods),
+                    config.public_methods_threshold,
+                ),
+                measure(
+                    "public attributes",
+                    finite(public_attributes),
+                    config.public_attributes_threshold,
+                ),
+            ],
+        ),
+    };
+    let quality = scores.class_design.score;
+
+    ClassHealth {
+        name: space.name.clone(),
+        kind: space.kind,
+        start_line: space.start_line,
+        end_line: space.end_line,
+        quality,
+        grade: Grade::of(quality),
+        methods: finite(methods),
+        scores,
+    }
+}
+
+/// Collects every scored class space below `space`, in source order.
+///
+/// A class space only counts when its language really computed the
+/// class-level metrics. `Wmc::compute` is a no-op for every grammar but
+/// Java, and a no-op leaves the space kind at `Unknown`, which is exactly
+/// what `wmc::Stats::is_disabled` reports. So a Python or JavaScript class
+/// is skipped rather than scored a meaningless 100.
+fn collect_classes(space: &FuncSpace, config: &HealthConfig, out: &mut Vec<ClassHealth>) {
+    for child in &space.spaces {
+        if matches!(child.kind, SpaceKind::Class | SpaceKind::Interface)
+            && !child.metrics.wmc.is_disabled()
+        {
+            out.push(class_health(child, config));
+        }
+        collect_classes(child, config, out);
+    }
+}
+
+/// Averages class qualities, weighting each by how many methods it defines.
+///
+/// A one-method holder should not weigh as much as a forty-method service,
+/// for the same reason a file weights its functions by length.
+fn weighted_class_quality(classes: &[ClassHealth]) -> f64 {
+    let total_weight: f64 = classes.iter().map(|class| class.methods.max(0.0)).sum();
+    if total_weight > 0.0 {
+        classes
+            .iter()
+            .map(|class| class.quality * class.methods.max(0.0))
+            .sum::<f64>()
+            / total_weight
+    } else if classes.is_empty() {
+        100.0
+    } else {
+        classes.iter().map(|class| class.quality).sum::<f64>() / classes.len() as f64
+    }
+}
+
+/// Blends a file's function quality with its class quality.
+///
+/// With no scored classes this is the function quality untouched, so a file
+/// in a language without class-level metrics scores exactly what it scored
+/// before classes were scored at all.
+fn blend_with_classes(functions: f64, classes: &[ClassHealth], config: &HealthConfig) -> f64 {
+    if classes.is_empty() {
+        return functions;
+    }
+    let weight = config.weights.class_design;
+    // A negative or non-finite weight is a misconfiguration, not a request
+    // to invert the score; fall back to counting only the functions.
+    if !weight.is_finite() || weight <= 0.0 {
+        return functions;
+    }
+    let share = weight / (1.0 + weight);
+    functions.powf(1.0 - share) * weighted_class_quality(classes).powf(share)
+}
+
 /// Averages function qualities, weighting each by its length.
 ///
 /// Weighting by length keeps a file of one 300-statement disaster and five
@@ -403,7 +571,11 @@ pub fn file_health(space: &FuncSpace, path: &Path, config: &HealthConfig) -> Fil
     collect_functions(space, config, &mut functions);
     functions.sort_by_key(|function| function.start_line);
 
-    let quality = weighted_quality(functions.iter());
+    let mut classes = Vec::new();
+    collect_classes(space, config, &mut classes);
+    classes.sort_by_key(|class| class.start_line);
+
+    let quality = blend_with_classes(weighted_quality(functions.iter()), &classes, config);
 
     FileHealth {
         path: path.to_path_buf(),
@@ -411,6 +583,7 @@ pub fn file_health(space: &FuncSpace, path: &Path, config: &HealthConfig) -> Fil
         grade: Grade::of(quality),
         maintainability_index: space.metrics.mi.mi_visual_studio(),
         functions,
+        classes,
     }
 }
 
@@ -423,13 +596,23 @@ impl RepoHealth {
             .flat_map(|file| file.functions.iter().map(move |f| (&file.path, f)))
             .collect();
 
-        let quality = weighted_quality(all.iter().map(|(_, function)| *function));
+        let classes: Vec<ClassHealth> = files
+            .iter()
+            .flat_map(|file| file.classes.iter().cloned())
+            .collect();
+
+        let quality = blend_with_classes(
+            weighted_quality(all.iter().map(|(_, function)| *function)),
+            &classes,
+            config,
+        );
 
         let mut health = Self {
             quality,
             grade: Grade::of(quality),
             files: files.len(),
             functions: all.len(),
+            classes: classes.len(),
             ..Self::default()
         };
         for (_, function) in &all {
@@ -535,6 +718,7 @@ mod tests {
                     length: 1.0,
                     working_memory: 1.0,
                     interface: 0.5,
+                    ..super::super::Weights::default()
                 },
                 ..HealthConfig::default()
             },
@@ -612,6 +796,125 @@ mod tests {
             nested.functions[0].quality,
             flat.functions[0].quality
         );
+    }
+
+    /// A Java class with one public method and one public field, plus an
+    /// interface, so both class kinds are exercised.
+    const JAVA_CLASSES: &str = "interface Shape {
+    double area();
+}
+
+public class Box implements Shape {
+    public int side;
+    private int hidden;
+
+    public double area() {
+        return side * side;
+    }
+
+    private void reset() {
+        side = 0;
+    }
+}
+";
+
+    #[test]
+    fn a_java_class_and_interface_are_scored() {
+        let file = health(&LANG::Java, JAVA_CLASSES, "Box.java");
+        let names: Vec<&str> = file
+            .classes
+            .iter()
+            .map(|class| class.display_name())
+            .collect();
+        assert_eq!(names, ["Shape", "Box"], "in source order");
+        assert_eq!(file.classes[0].kind, SpaceKind::Interface);
+        assert_eq!(file.classes[1].kind, SpaceKind::Class);
+
+        let measures = &file.classes[1].scores.class_design.measures;
+        let named = |name: &str| {
+            measures
+                .iter()
+                .find(|measure| measure.name == name)
+                .unwrap_or_else(|| panic!("no {name} measure"))
+                .value
+        };
+        // `area` is public, `reset` is not; `side` is public, `hidden` is not.
+        assert_eq!(named("public methods"), 1.0);
+        assert_eq!(named("public attributes"), 1.0);
+        // `area` and `reset` are one apiece.
+        assert_eq!(named("weighted methods"), 2.0);
+    }
+
+    #[test]
+    fn a_class_in_a_language_without_class_metrics_is_not_scored() {
+        // Python, JavaScript and TypeScript all produce class spaces, but
+        // none of them computes the class-level metrics, so scoring them
+        // would report a meaningless 100.
+        for (lang, source, name) in [
+            (
+                LANG::Python,
+                "class C:\n    def m(self):\n        return 1\n",
+                "c.py",
+            ),
+            (
+                LANG::Javascript,
+                "class C {\n    m() { return 1; }\n}\n",
+                "c.js",
+            ),
+            (
+                LANG::Typescript,
+                "class C {\n    m(): number { return 1; }\n}\n",
+                "c.ts",
+            ),
+        ] {
+            let file = health(&lang, source, name);
+            assert!(
+                file.classes.is_empty(),
+                "{name} should have no scored classes, got {:?}",
+                file.classes.len()
+            );
+        }
+    }
+
+    #[test]
+    fn classes_only_move_a_file_score_where_they_are_scored() {
+        // Without scored classes the blend is the function quality itself,
+        // so every language but Java scores exactly what it scored before
+        // classes were scored at all.
+        let file = health(
+            &LANG::Python,
+            "class C:\n    def m(self):\n        return 1\n",
+            "c.py",
+        );
+        assert_eq!(file.quality, weighted_quality(file.functions.iter()));
+
+        // With them, the file's own classes pull on the score.
+        let java = health(&LANG::Java, JAVA_CLASSES, "Box.java");
+        let functions_only = weighted_quality(java.functions.iter());
+        assert!(
+            (java.quality - functions_only).abs() > f64::EPSILON,
+            "the classes should move the file score: {} vs {functions_only}",
+            java.quality
+        );
+    }
+
+    #[test]
+    fn a_wide_class_scores_below_a_narrow_one() {
+        let narrow = health(&LANG::Java, JAVA_CLASSES, "Box.java");
+        let mut wide = String::from("public class Wide {\n");
+        for index in 0..40 {
+            wide.push_str(&format!("    public int field{index};\n"));
+            wide.push_str(&format!("    public int get{index}() {{ return 1; }}\n"));
+        }
+        wide.push_str("}\n");
+        let wide = health(&LANG::Java, &wide, "Wide.java");
+        assert!(
+            wide.classes[0].quality < narrow.classes[1].quality,
+            "a 40-method class {} should score below a 2-method one {}",
+            wide.classes[0].quality,
+            narrow.classes[1].quality
+        );
+        assert_eq!(wide.classes[0].grade, Grade::Poor);
     }
 
     #[test]

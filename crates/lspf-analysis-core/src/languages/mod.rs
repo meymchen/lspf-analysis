@@ -1,5 +1,8 @@
 #![allow(clippy::enum_variant_names)]
 
+pub mod language_java;
+pub use language_java::*;
+
 pub mod language_javascript;
 pub use language_javascript::*;
 

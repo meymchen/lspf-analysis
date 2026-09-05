@@ -19,6 +19,7 @@ pub fn language_for(language_id: &str, path: &Path) -> Option<LANG> {
     let from_id = match language_id {
         "rust" => Some(LANG::Rust),
         "python" => Some(LANG::Python),
+        "java" => Some(LANG::Java),
         "javascript" | "javascriptreact" => Some(LANG::Javascript),
         "typescript" => Some(LANG::Typescript),
         "typescriptreact" => Some(LANG::Tsx),
@@ -134,6 +135,54 @@ pub fn name_range(
     ))
 }
 
+/// Finds the 1-based line on which a space declares its name, given the
+/// lines it spans.
+///
+/// A declaration does not always begin on the line its space does. Java
+/// folds annotations and modifiers into the declaration node, so
+/// `@Override` is a method's first line and the name is on a later one; the
+/// same holds for an annotated class. The name is looked for on each line of
+/// the header until it is found.
+///
+/// Lines that are nothing but an annotation are skipped, so a name that also
+/// appears inside one — `@SuppressWarnings("plain")` over `int plain()` —
+/// does not stand in for the declaration itself. A name spelled inside a
+/// multi-line annotation still can, which is the limit of reading this off
+/// the text rather than the tree.
+///
+/// Returns `None` when the name is on none of those lines, which is the case
+/// for an anonymous function and for a name the parser qualified.
+pub fn declaration_line(
+    text: &str,
+    start_line: usize,
+    end_line: usize,
+    name: &str,
+) -> Option<usize> {
+    if name.is_empty() {
+        return None;
+    }
+    (start_line..=end_line.max(start_line)).find(|&line| {
+        line_content(text, line).is_some_and(|content| {
+            !content.trim_start().starts_with('@') && whole_word(content, name).is_some()
+        })
+    })
+}
+
+/// Finds where a space declares its name, and the range covering it.
+///
+/// The line comes from [`declaration_line`]; the columns from
+/// [`name_range`].
+pub fn declaration_range(
+    text: &str,
+    start_line: usize,
+    end_line: usize,
+    name: &str,
+    encoding: PositionEncoding,
+) -> Option<(usize, Range)> {
+    let line = declaration_line(text, start_line, end_line, name)?;
+    Some((line, name_range(text, line, name, encoding)?))
+}
+
 /// Returns a 1-based line of `text` without its line break.
 fn line_content(text: &str, line: usize) -> Option<&str> {
     text.split_inclusive('\n')
@@ -188,6 +237,10 @@ mod tests {
             language_for("typescriptreact", Path::new("a.ts")),
             Some(LANG::Tsx)
         );
+        assert_eq!(
+            language_for("java", Path::new("weird.txt")),
+            Some(LANG::Java)
+        );
     }
 
     #[test]
@@ -196,8 +249,49 @@ mod tests {
             language_for("plaintext", Path::new("/tmp/a.rs")),
             Some(LANG::Rust)
         );
+        assert_eq!(
+            language_for("plaintext", Path::new("/tmp/A.java")),
+            Some(LANG::Java)
+        );
         assert_eq!(language_for("plaintext", Path::new("/tmp/a.txt")), None);
         assert_eq!(language_for("", Path::new("/tmp/README")), None);
+    }
+
+    #[test]
+    fn a_declaration_is_found_past_the_lines_its_annotations_take() {
+        let text = "@Deprecated\npublic class Legacy {\n    @Override\n    public int plain() {\n    }\n}\n";
+        assert_eq!(declaration_line(text, 1, 6, "Legacy"), Some(2));
+        assert_eq!(declaration_line(text, 3, 5, "plain"), Some(4));
+    }
+
+    #[test]
+    fn a_declaration_on_the_first_line_is_still_found_there() {
+        let text = "fn add(a: u32) -> u32 {\n    a\n}\n";
+        assert_eq!(declaration_line(text, 1, 3, "add"), Some(1));
+    }
+
+    #[test]
+    fn a_name_only_inside_an_annotation_is_not_a_declaration() {
+        let text = "@SuppressWarnings(\"plain\")\npublic int other() {\n}\n";
+        assert_eq!(declaration_line(text, 1, 3, "plain"), None);
+    }
+
+    #[test]
+    fn a_name_that_is_nowhere_in_the_header_has_no_line() {
+        let text = "const f = function () {\n    return 1;\n};\n";
+        assert_eq!(declaration_line(text, 1, 3, "<anonymous>"), None);
+        assert_eq!(declaration_line(text, 1, 3, ""), None);
+    }
+
+    #[test]
+    fn a_declaration_range_covers_the_name_on_the_line_it_was_found() {
+        let text = "@Override\npublic int plain() {\n}\n";
+        let (line, range) =
+            declaration_range(text, 1, 3, "plain", PositionEncoding::Utf16).unwrap();
+        assert_eq!(line, 2);
+        assert_eq!(range.start.line, 1, "0-based on the wire");
+        assert_eq!(range.start.character, 11);
+        assert_eq!(range.end.character, 16);
     }
 
     fn uri(raw: &str) -> Uri {

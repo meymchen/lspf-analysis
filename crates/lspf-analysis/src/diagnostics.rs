@@ -2,10 +2,10 @@
 
 use lspf::PositionEncoding;
 use lspf::types::{Code, Diagnostic, DiagnosticSeverity};
-use lspf_analysis_core::health::{FileHealth, FunctionHealth, HealthConfig};
+use lspf_analysis_core::health::{ClassHealth, FileHealth, FunctionHealth, HealthConfig};
 
 use crate::config::Settings;
-use crate::document::line_range;
+use crate::document::{declaration_line, line_range};
 use crate::i18n::Locale;
 
 /// The `source` every diagnostic this server publishes carries.
@@ -15,6 +15,17 @@ pub const SOURCE: &str = "lspf-analysis";
 /// per-metric diagnostics are enabled. It is the point where a pillar has
 /// passed its threshold and kept going.
 const PILLAR_FLOOR: f64 = 50.0;
+
+/// The line a diagnostic about `name` is drawn across.
+///
+/// The signature line, not the space's first line: Java's declaration nodes
+/// span their annotations, so an `@Override` would otherwise take the
+/// squiggle that belongs on the signature. A name that cannot be found in
+/// the header — an anonymous function — falls back to the first line, which
+/// is the best that is known about it.
+fn reported_line(text: &str, start_line: usize, end_line: usize, name: &str) -> usize {
+    declaration_line(text, start_line, end_line, name).unwrap_or(start_line)
+}
 
 /// Builds the diagnostics for one analyzed file.
 ///
@@ -38,6 +49,12 @@ pub fn build(
             diagnostics.push(quality_diagnostic(function, text, encoding, config, locale));
         } else if settings.diagnostics.per_metric {
             diagnostics.extend(pillar_diagnostics(function, text, encoding, locale));
+        }
+    }
+
+    for class in &report.classes {
+        if class.quality < config.quality_warn {
+            diagnostics.push(class_diagnostic(class, text, encoding, config, locale));
         }
     }
 
@@ -102,7 +119,16 @@ fn quality_diagnostic(
         },
     );
     Diagnostic {
-        range: line_range(text, function.start_line, encoding),
+        range: line_range(
+            text,
+            reported_line(
+                text,
+                function.start_line,
+                function.end_line,
+                function.display_name(),
+            ),
+            encoding,
+        ),
         severity: Some(severity),
         code: Some(Code::String("quality".into())),
         source: Some(SOURCE.into()),
@@ -115,6 +141,50 @@ fn quality_diagnostic(
                     locale.t(function.grade.as_str()),
                     &cause,
                     &summarize(function, locale),
+                ],
+            )
+            .into(),
+        ..Diagnostic::default()
+    }
+}
+
+/// The same headline, for a class or interface below the threshold.
+fn class_diagnostic(
+    class: &ClassHealth,
+    text: &str,
+    encoding: PositionEncoding,
+    config: &HealthConfig,
+    locale: Locale,
+) -> Diagnostic {
+    let severity = if class.quality < config.quality_error {
+        DiagnosticSeverity::Error
+    } else {
+        DiagnosticSeverity::Warning
+    };
+    let pillar = &class.scores.class_design;
+    let measures = pillar
+        .measures
+        .iter()
+        .map(|metric| format!("{} {:.0}", locale.t(metric.name), metric.value))
+        .collect::<Vec<_>>()
+        .join(locale.t(", "));
+    Diagnostic {
+        range: line_range(
+            text,
+            reported_line(text, class.start_line, class.end_line, class.display_name()),
+            encoding,
+        ),
+        severity: Some(severity),
+        code: Some(Code::String("class-quality".into())),
+        source: Some(SOURCE.into()),
+        message: locale
+            .fill(
+                "class `{0}`: quality {1}% ({2}) — {3}",
+                &[
+                    class.display_name(),
+                    &format!("{:.0}", class.quality),
+                    locale.t(class.grade.as_str()),
+                    &measures,
                 ],
             )
             .into(),
@@ -151,7 +221,16 @@ fn pillar_diagnostics(
         .flat_map(|pillar| pillar.measures.iter())
         .filter(|metric| metric.score < PILLAR_FLOOR)
         .map(|metric| Diagnostic {
-            range: line_range(text, function.start_line, encoding),
+            range: line_range(
+                text,
+                reported_line(
+                    text,
+                    function.start_line,
+                    function.end_line,
+                    function.display_name(),
+                ),
+                encoding,
+            ),
             severity: Some(DiagnosticSeverity::Information),
             code: Some(Code::String(metric_code(metric.name).into())),
             source: Some(SOURCE.into()),
@@ -223,6 +302,26 @@ mod tests {
         let path = Path::new("a.rs");
         let report = analyze(LANG::Rust, source.to_string(), path, &settings.health).unwrap();
         build(&report, source, PositionEncoding::Utf16, settings)
+    }
+
+    fn java_diagnostics_for(source: &str, settings: &Settings) -> Vec<Diagnostic> {
+        let path = Path::new("A.java");
+        let report = analyze(LANG::Java, source.to_string(), path, &settings.health).unwrap();
+        build(&report, source, PositionEncoding::Utf16, settings)
+    }
+
+    /// A class wide enough to fail the class pillar: forty public getters
+    /// over forty public fields.
+    fn wide_class() -> String {
+        let mut source = String::from("public class Wide {\n");
+        for index in 0..40 {
+            source.push_str(&format!("    public int field{index};\n"));
+            source.push_str(&format!(
+                "    public int get{index}() {{ return field{index}; }}\n"
+            ));
+        }
+        source.push_str("}\n");
+        source
     }
 
     fn message(diagnostic: &Diagnostic) -> String {
@@ -339,6 +438,64 @@ mod tests {
             diagnostics
                 .iter()
                 .any(|d| d.code == Some(Code::String("file-quality".into()))),
+            "{diagnostics:?}"
+        );
+    }
+
+    #[test]
+    fn a_wide_java_class_is_reported_on_its_declaration_line() {
+        let diagnostics = java_diagnostics_for(&wide_class(), &Settings::default());
+        let class: Vec<&Diagnostic> = diagnostics
+            .iter()
+            .filter(|d| d.code == Some(Code::String("class-quality".into())))
+            .collect();
+        assert_eq!(class.len(), 1, "{diagnostics:?}");
+        assert_eq!(class[0].range.start.line, 0, "the `public class` line");
+        let text = message(class[0]);
+        assert!(text.contains("`Wide`"), "{text}");
+        assert!(text.contains("public methods 40"), "{text}");
+    }
+
+    #[test]
+    fn a_narrow_java_class_produces_nothing() {
+        let source = "public class Small {\n    private int a;\n\
+                      \n    public int get() { return a; }\n}\n";
+        let diagnostics = java_diagnostics_for(source, &Settings::default());
+        assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    }
+
+    #[test]
+    fn an_annotated_declaration_is_reported_on_its_signature_line() {
+        // Java folds annotations into the declaration node, so the space
+        // starts on `@Override`; the squiggle belongs on the signature.
+        let mut source = String::from("@Deprecated\npublic class Wide {\n");
+        for index in 0..40 {
+            source.push_str(&format!("    public int field{index};\n"));
+            source.push_str(&format!(
+                "    @Override\n    public int get{index}() {{ return field{index}; }}\n"
+            ));
+        }
+        source.push_str("}\n");
+        let diagnostics = java_diagnostics_for(&source, &Settings::default());
+        let class = diagnostics
+            .iter()
+            .find(|d| d.code == Some(Code::String("class-quality".into())))
+            .unwrap_or_else(|| panic!("no class diagnostic: {diagnostics:?}"));
+        assert_eq!(
+            class.range.start.line, 1,
+            "the `public class Wide` line, not `@Deprecated`"
+        );
+    }
+
+    #[test]
+    fn a_language_without_class_metrics_gets_no_class_diagnostic() {
+        // Rust has class-shaped spaces (`impl`, `trait`) but no class
+        // metrics, so nothing should be reported against them.
+        let diagnostics = diagnostics_for(&tangled(), &Settings::default());
+        assert!(
+            !diagnostics
+                .iter()
+                .any(|d| d.code == Some(Code::String("class-quality".into()))),
             "{diagnostics:?}"
         );
     }

@@ -8,8 +8,8 @@ It computes code metrics with a tree-sitter-based engine forked from
 them into a code health rating, and publishes the result as LSP diagnostics
 through [lspf](https://github.com/meymchen/lspf).
 
-Supported languages: **JavaScript**, **Python**, **Rust**, **TypeScript**,
-**TSX**.
+Supported languages: **Java**, **JavaScript**, **Python**, **Rust**,
+**TypeScript**, **TSX**.
 
 ## What it reports
 
@@ -20,6 +20,9 @@ about a symbol rather than displacing it. A client that would rather draw its
 own list than read one function at a time asks for
 [the per-function breakdown](#the-per-function-breakdown); the VS Code
 extension puts it in an Explorer tree.
+
+Where the engine computes class-level metrics — Java, today — a class or
+interface is reported the same way, on its declaration line and on its name.
 
 Quality is blended from four pillars. Each pillar takes the **worst** of its
 metrics rather than their average, so a function cannot hide a bad number
@@ -33,6 +36,18 @@ behind a good one, and no property is counted twice.
 | **Vocabulary load** | names held at once | 8 | [Miller 1956][mi56], [Cowan 2001][co01] |
 | | Halstead difficulty | 12 | vocabulary size is what loads working memory, [Peitek et al. 2021][pe21] |
 | **Interface** | parameters | 4 | unit interfacing in the SIG model; the smell with the highest defect correlation in [Topuz 2022][to22] |
+
+A class is not a function, and none of those four is defined for one, so a
+class is scored on a pillar of its own. This only happens where the engine
+really computes the class-level metrics, which today means Java; a `class`
+space in a language whose `WMC`, `NPM` and `NPA` are no-ops would score a
+constant 100 and say nothing, so it is left out of the report entirely.
+
+| Pillar | Metric | Default threshold | Evidence |
+| --- | --- | ---: | --- |
+| **Class design** | weighted methods per class | 34 | where "uncommon" starts in a benchmark of the 111 Java systems in the Qualitas.class Corpus, [Filó et al. 2015][fi15] |
+| | public methods | 14 | the same catalogue's boundary for methods per class, read conservatively; [Ferreira et al. 2012][fe12] |
+| | public attributes | 8 | the same, for fields per class |
 
 ### The formula
 
@@ -56,6 +71,11 @@ $$ Q = \prod_{P} s_P^{\,w_P}, \qquad \sum_{P} w_P = 1 $$
 A geometric mean rather than an arithmetic one, so one collapsed pillar drags
 the whole score down instead of hiding behind the others.
 
+A class scores at its single pillar. A file blends its functions with its
+classes the same geometric way, weighting each function by its length and
+each class by how many methods it defines; with no scored classes the second
+factor is absent and the file scores exactly what its functions do.
+
 Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25),
 **poor** (<25).
 
@@ -74,14 +94,13 @@ about evidence, not an oversight.
 - **Number of exit points** — the single-exit rule is argued in style guides
   on both sides, but a literature search turns up no controlled study
   relating exit count to defects or comprehension.
-- **Number of methods, WMC, NPM, NPA** — properties of a class, not of a
-  function. The last three are not computed for any supported language.
-- **ABC** — its `compute` is a no-op for every supported language, so it
-  would contribute a constant zero. It is hidden from reports rather than
-  printed as zeros.
-
-Adding Java, Kotlin or C++ would make the class-level metrics real and worth
-a pillar of their own; until then they would score nothing.
+- **Number of methods** — a count without the complexity weighting that
+  makes WMC say something about how much a class does. It is carried on the
+  class report as the weight a file balances its classes by, not scored.
+- **ABC** — computed for Java and for no other grammar this fork carries.
+  Scoring it would add a second size measure that only one language has,
+  which would make a Java score mean something different from every other
+  language's. It is reported, and hidden where it is not computed.
 
 ### Defaults
 
@@ -93,7 +112,11 @@ a pillar of their own; until then they would score nothing.
 | `workingMemoryThreshold` | 8 | Names scoring 50% |
 | `halsteadDifficultyThreshold` | 12 | Halstead difficulty scoring 50% |
 | `parametersThreshold` | 4 | Parameters scoring 50% |
+| `wmcThreshold` | 34 | Weighted methods per class scoring 50% |
+| `publicMethodsThreshold` | 14 | Public methods per class scoring 50% |
+| `publicAttributesThreshold` | 8 | Public attributes per class scoring 50% |
 | `weights` | 1 / 1 / 1 / 0.5 | Relative pillar weights, normalized before use |
+| `weights.classDesign` | 0.5 | How much a file's classes weigh against its functions |
 | `qualityWarn` | 25 | Below this, a function is reported |
 | `qualityError` | 10 | Below this, it is an error rather than a warning |
 
@@ -145,6 +168,15 @@ configuration written for the earlier model still means what it meant.
 - \[ra23\] P. Rani, A. Blasi, N. Stulova, et al. *A decade of code comment
   quality assessment: a systematic literature review.* JSS 195, 2023.
   <https://doi.org/10.1016/j.jss.2022.111515>
+- \[fi15\] T. Filó, M. Bigonha, K. Ferreira. *A Catalogue of Thresholds for
+  Object-Oriented Software Metrics.* SOFTENG 2015.
+  <https://personales.upv.es/thinkmind/dl/conferences/softeng/softeng_2015/softeng_2015_3_10_55070.pdf>
+  — evaluated for bad-smell detection and fault prediction in the same
+  authors' JBCS 2024 follow-up,
+  <https://journals-sol.sbc.org.br/index.php/jbcs/article/view/3373>
+- \[fe12\] K. Ferreira, M. Bigonha, R. Bigonha, L. Mendes, H. Almeida.
+  *Identifying thresholds for object-oriented software metrics.* JSS 85(2),
+  2012. <https://doi.org/10.1016/j.jss.2011.05.044>
 
 [c18]: https://doi.org/10.1145/3194164.3194186
 [mb20]: https://doi.org/10.1145/3382494.3410636
@@ -160,6 +192,8 @@ configuration written for the earlier model still means what it meant.
 [ee01]: https://doi.org/10.1109/32.935855
 [sj12]: https://doi.org/10.1145/2372251.2372269
 [ra23]: https://doi.org/10.1016/j.jss.2022.111515
+[fi15]: https://personales.upv.es/thinkmind/dl/conferences/softeng/softeng_2015/softeng_2015_3_10_55070.pdf
+[fe12]: https://doi.org/10.1016/j.jss.2011.05.044
 
 ## Install
 
@@ -204,7 +238,7 @@ see the connection come up.
 
 In VS Code the extension does this for you. Any other editor launches
 `lspf-analysis serve --stdio` the way it launches any language server, for
-the language ids `rust`, `python`, `javascript`, `javascriptreact`,
+the language ids `java`, `rust`, `python`, `javascript`, `javascriptreact`,
 `typescript` and `typescriptreact`.
 
 Open a source file with a long or deeply nested function; the signature line

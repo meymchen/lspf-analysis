@@ -26,6 +26,16 @@ mk_langs!(
         ["js", "js2"]
     ),
     (
+        Java,
+        "The `Java` language",
+        "java",
+        JavaCode,
+        JavaParser,
+        tree_sitter_java,
+        [java],
+        ["java"]
+    ),
+    (
         Rust,
         "The `Rust` language",
         "rust",

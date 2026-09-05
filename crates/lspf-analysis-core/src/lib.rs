@@ -10,6 +10,7 @@
 //!
 //! ## Supported Languages
 //!
+//! - Java
 //! - JavaScript
 //! - Python
 //! - Rust
@@ -41,6 +42,14 @@
 //! - NARGS: it counts the number of arguments of a function/method.
 //! - WM: it counts the variables a reader has to keep in working memory
 //!   at the busiest statement of a function.
+//! - ABC: it counts the assignments, branches and conditions of a piece of
+//!   code. Computed for `Java` only.
+//! - WMC: it sums the cyclomatic complexities of the methods of a class.
+//!   Computed for `Java` only.
+//! - NPM: it counts the public methods of a class/interface. Computed for
+//!   `Java` only.
+//! - NPA: it counts the public attributes of a class/interface. Computed
+//!   for `Java` only.
 //!
 //! ## Health Scoring
 //!

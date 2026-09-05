@@ -365,3 +365,4 @@ health:
               value: 1
               threshold: 4
               score: 94.118
+  classes: []

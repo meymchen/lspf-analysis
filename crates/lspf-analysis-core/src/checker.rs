@@ -330,6 +330,59 @@ impl Checker for TsxCode {
     }
 }
 
+impl Checker for JavaCode {
+    fn is_comment(node: &Node) -> bool {
+        node.kind_id() == Java::LineComment || node.kind_id() == Java::BlockComment
+    }
+
+    fn is_useful_comment(_: &Node, _: &[u8]) -> bool {
+        false
+    }
+
+    fn is_func_space(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Java::Program | Java::ClassDeclaration | Java::InterfaceDeclaration
+        )
+    }
+
+    fn is_func(node: &Node) -> bool {
+        node.kind_id() == Java::MethodDeclaration || node.kind_id() == Java::ConstructorDeclaration
+    }
+
+    fn is_closure(node: &Node) -> bool {
+        node.kind_id() == Java::LambdaExpression
+    }
+
+    fn is_call(node: &Node) -> bool {
+        node.kind_id() == Java::MethodInvocation
+    }
+
+    // Upstream returns `false` here, which makes `NArgs` count the
+    // parentheses and commas of a `formal_parameters` node as arguments —
+    // `f(int a, int b)` reports five. The interface pillar of the health
+    // score reads that number directly, so the separators are excluded the
+    // same way every other language excludes them.
+    fn is_non_arg(node: &Node) -> bool {
+        matches!(
+            node.kind_id().into(),
+            Java::LPAREN | Java::COMMA | Java::RPAREN
+        )
+    }
+
+    fn is_string(node: &Node) -> bool {
+        node.kind_id() == Java::StringLiteral
+    }
+
+    fn is_else_if(_: &Node) -> bool {
+        false
+    }
+
+    fn is_primitive(_id: u16) -> bool {
+        false
+    }
+}
+
 impl Checker for RustCode {
     fn is_comment(node: &Node) -> bool {
         node.kind_id() == Rust::LineComment || node.kind_id() == Rust::BlockComment

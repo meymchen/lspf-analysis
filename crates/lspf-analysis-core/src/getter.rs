@@ -299,6 +299,66 @@ impl Getter for TsxCode {
     get_operator!(Tsx);
 }
 
+impl Getter for JavaCode {
+    fn get_space_kind(node: &Node) -> SpaceKind {
+        use Java::*;
+
+        match node.kind_id().into() {
+            ClassDeclaration => SpaceKind::Class,
+            MethodDeclaration | ConstructorDeclaration | LambdaExpression => SpaceKind::Function,
+            InterfaceDeclaration => SpaceKind::Interface,
+            Program => SpaceKind::Unit,
+            _ => SpaceKind::Unknown,
+        }
+    }
+
+    fn get_op_type(node: &Node) -> HalsteadType {
+        use Java::*;
+        // Some guides that informed grammar choice for Halstead
+        // keywords, operators, literals: https://docs.oracle.com/javase/specs/jls/se18/html/jls-3.html#jls-3.12
+        // https://www.geeksforgeeks.org/software-engineering-halsteads-software-metrics/
+        match node.kind_id().into() {
+            // Operator: control flow
+            If | Else | Switch | Case | Try | Catch | Throw | Throws | Throws2 | For | While
+            | Continue | Break | Do | Finally
+            // Operator: keywords
+            | New | Return | Default | Abstract | Assert | Instanceof | Extends | Final
+            | Implements | Transient | Synchronized | Super | This | VoidType
+            // Operator: brackets, comma and terminators (separators)
+            | SEMI | COMMA | COLONCOLON | LBRACE | LBRACK | LPAREN
+            // Operator: operators
+            | EQ | LT | GT | BANG | TILDE | QMARK | COLON // no grammar for the lambda operator ->
+            | EQEQ | LTEQ | GTEQ | BANGEQ | AMPAMP | PIPEPIPE | PLUSPLUS | DASHDASH
+            | PLUS | DASH | STAR | SLASH | AMP | PIPE | CARET | PERCENT | LTLT | GTGT | GTGTGT
+            | PLUSEQ | DASHEQ | STAREQ | SLASHEQ | AMPEQ | PIPEEQ | CARETEQ | PERCENTEQ | LTLTEQ
+            | GTGTEQ | GTGTGTEQ
+            // Primitive types
+            | Int | Float => HalsteadType::Operator,
+            // Operands: variables, constants, literals
+            Identifier | NullLiteral | ClassLiteral | StringLiteral | CharacterLiteral
+            | HexIntegerLiteral | OctalIntegerLiteral | BinaryIntegerLiteral
+            | DecimalIntegerLiteral | HexFloatingPointLiteral | DecimalFloatingPointLiteral => {
+                HalsteadType::Operand
+            }
+            _ => HalsteadType::Unknown,
+        }
+    }
+
+    // Not `get_operator!`: Java needs `void` spelled out on top of what the
+    // macro writes.
+    #[inline(always)]
+    fn get_operator_id_as_str(id: u16) -> &'static str {
+        let typ = id.into();
+        match typ {
+            Java::LPAREN => "()",
+            Java::LBRACK => "[]",
+            Java::LBRACE => "{}",
+            Java::VoidType => "void",
+            _ => typ.into(),
+        }
+    }
+}
+
 impl Getter for RustCode {
     fn get_func_space_name<'a>(node: &Node, code: &'a [u8]) -> Option<&'a str> {
         // we're in a function or in a class or an impl
