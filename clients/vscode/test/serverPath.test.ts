@@ -37,7 +37,7 @@ test('resolves the server bundled in a production VSIX', () => {
     );
 });
 
-test('a configured path wins over both other sources', () => {
+test('a configured POSIX path wins over both other sources', { skip: process.platform === 'win32' }, () => {
     for (const development of [true, false]) {
         assert.deepEqual(
             resolveServerBinary({
@@ -47,6 +47,20 @@ test('a configured path wins over both other sources', () => {
                 platform: 'linux',
             }),
             { binary: '/usr/local/bin/lspf-analysis', source: 'configured' },
+        );
+    }
+});
+
+test('a configured Windows path wins over both other sources', { skip: process.platform !== 'win32' }, () => {
+    for (const development of [true, false]) {
+        assert.deepEqual(
+            resolveServerBinary({
+                extensionPath: 'C:\\repo\\clients\\vscode',
+                development,
+                configuredPath: 'C:\\tools\\lspf-analysis.exe',
+                platform: 'win32',
+            }),
+            { binary: 'C:\\tools\\lspf-analysis.exe', source: 'configured' },
         );
     }
 });

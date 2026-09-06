@@ -16,6 +16,18 @@ mk_langs!(
     // 7) file extensions
     // 8) emacs modes
     (
+        Cpp,
+        "The `C++` language",
+        "cpp",
+        CppCode,
+        CppParser,
+        tree_sitter_cpp,
+        [
+            cpp, cc, cxx, cxxm, ccm, cppm, h, hh, hpp, hxx, inl, ipp, tpp
+        ],
+        ["c++"]
+    ),
+    (
         Javascript,
         "The `JavaScript` language",
         "javascript",

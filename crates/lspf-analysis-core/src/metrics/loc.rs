@@ -564,46 +564,48 @@ fn check_comment_ends_on_code_line(stats: &mut Stats, start_code_line: usize) {
 
 impl Loc for PythonCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Python::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
-        match node.kind_id().into() {
-            StringStart | StringEnd | StringContent | Block | Module => {}
-            Comment => {
+        match Python::from(node.kind_id()) {
+            Python::StringStart
+            | Python::StringEnd
+            | Python::StringContent
+            | Python::Block
+            | Python::Module => {}
+            Python::Comment => {
                 add_cloc_lines(stats, start, end);
             }
-            String => {
+            Python::String => {
                 let parent = node.parent().unwrap();
-                if let ExpressionStatement = parent.kind_id().into() {
+                if parent.kind_id() == Python::ExpressionStatement as u16 {
                     add_cloc_lines(stats, start, end);
                 } else if parent.start_row() != start {
                     check_comment_ends_on_code_line(stats, start);
                     stats.ploc.lines.insert(start);
                 }
             }
-            Statement
-            | SimpleStatements
-            | ImportStatement
-            | FutureImportStatement
-            | ImportFromStatement
-            | PrintStatement
-            | AssertStatement
-            | ReturnStatement
-            | DeleteStatement
-            | RaiseStatement
-            | PassStatement
-            | BreakStatement
-            | ContinueStatement
-            | IfStatement
-            | ForStatement
-            | WhileStatement
-            | TryStatement
-            | WithStatement
-            | GlobalStatement
-            | NonlocalStatement
-            | ExecStatement
-            | ExpressionStatement => {
+            Python::Statement
+            | Python::SimpleStatements
+            | Python::ImportStatement
+            | Python::FutureImportStatement
+            | Python::ImportFromStatement
+            | Python::PrintStatement
+            | Python::AssertStatement
+            | Python::ReturnStatement
+            | Python::DeleteStatement
+            | Python::RaiseStatement
+            | Python::PassStatement
+            | Python::BreakStatement
+            | Python::ContinueStatement
+            | Python::IfStatement
+            | Python::ForStatement
+            | Python::WhileStatement
+            | Python::TryStatement
+            | Python::WithStatement
+            | Python::GlobalStatement
+            | Python::NonlocalStatement
+            | Python::ExecStatement
+            | Python::ExpressionStatement => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -616,20 +618,32 @@ impl Loc for PythonCode {
 
 impl Loc for JavascriptCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Javascript::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
-        match node.kind_id().into() {
-            String | DQUOTE | Program => {}
-            Comment => {
+        match Javascript::from(node.kind_id()) {
+            Javascript::String | Javascript::DQUOTE | Javascript::Program => {}
+            Javascript::Comment => {
                 add_cloc_lines(stats, start, end);
             }
-            ExpressionStatement | ExportStatement | ImportStatement | StatementBlock
-            | IfStatement | SwitchStatement | ForStatement | ForInStatement | WhileStatement
-            | DoStatement | TryStatement | WithStatement | BreakStatement | ContinueStatement
-            | DebuggerStatement | ReturnStatement | ThrowStatement | EmptyStatement
-            | StatementIdentifier => {
+            Javascript::ExpressionStatement
+            | Javascript::ExportStatement
+            | Javascript::ImportStatement
+            | Javascript::StatementBlock
+            | Javascript::IfStatement
+            | Javascript::SwitchStatement
+            | Javascript::ForStatement
+            | Javascript::ForInStatement
+            | Javascript::WhileStatement
+            | Javascript::DoStatement
+            | Javascript::TryStatement
+            | Javascript::WithStatement
+            | Javascript::BreakStatement
+            | Javascript::ContinueStatement
+            | Javascript::DebuggerStatement
+            | Javascript::ReturnStatement
+            | Javascript::ThrowStatement
+            | Javascript::EmptyStatement
+            | Javascript::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -642,20 +656,32 @@ impl Loc for JavascriptCode {
 
 impl Loc for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Typescript::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
-        match node.kind_id().into() {
-            String | DQUOTE | Program => {}
-            Comment => {
+        match Typescript::from(node.kind_id()) {
+            Typescript::String | Typescript::DQUOTE | Typescript::Program => {}
+            Typescript::Comment => {
                 add_cloc_lines(stats, start, end);
             }
-            ExpressionStatement | ExportStatement | ImportStatement | StatementBlock
-            | IfStatement | SwitchStatement | ForStatement | ForInStatement | WhileStatement
-            | DoStatement | TryStatement | WithStatement | BreakStatement | ContinueStatement
-            | DebuggerStatement | ReturnStatement | ThrowStatement | EmptyStatement
-            | StatementIdentifier => {
+            Typescript::ExpressionStatement
+            | Typescript::ExportStatement
+            | Typescript::ImportStatement
+            | Typescript::StatementBlock
+            | Typescript::IfStatement
+            | Typescript::SwitchStatement
+            | Typescript::ForStatement
+            | Typescript::ForInStatement
+            | Typescript::WhileStatement
+            | Typescript::DoStatement
+            | Typescript::TryStatement
+            | Typescript::WithStatement
+            | Typescript::BreakStatement
+            | Typescript::ContinueStatement
+            | Typescript::DebuggerStatement
+            | Typescript::ReturnStatement
+            | Typescript::ThrowStatement
+            | Typescript::EmptyStatement
+            | Typescript::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -668,20 +694,32 @@ impl Loc for TypescriptCode {
 
 impl Loc for TsxCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Tsx::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
-        match node.kind_id().into() {
-            String | DQUOTE | Program => {}
-            Comment => {
+        match Tsx::from(node.kind_id()) {
+            Tsx::String | Tsx::DQUOTE | Tsx::Program => {}
+            Tsx::Comment => {
                 add_cloc_lines(stats, start, end);
             }
-            ExpressionStatement | ExportStatement | ImportStatement | StatementBlock
-            | IfStatement | SwitchStatement | ForStatement | ForInStatement | WhileStatement
-            | DoStatement | TryStatement | WithStatement | BreakStatement | ContinueStatement
-            | DebuggerStatement | ReturnStatement | ThrowStatement | EmptyStatement
-            | StatementIdentifier => {
+            Tsx::ExpressionStatement
+            | Tsx::ExportStatement
+            | Tsx::ImportStatement
+            | Tsx::StatementBlock
+            | Tsx::IfStatement
+            | Tsx::SwitchStatement
+            | Tsx::ForStatement
+            | Tsx::ForInStatement
+            | Tsx::WhileStatement
+            | Tsx::DoStatement
+            | Tsx::TryStatement
+            | Tsx::WithStatement
+            | Tsx::BreakStatement
+            | Tsx::ContinueStatement
+            | Tsx::DebuggerStatement
+            | Tsx::ReturnStatement
+            | Tsx::ThrowStatement
+            | Tsx::EmptyStatement
+            | Tsx::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
@@ -694,27 +732,34 @@ impl Loc for TsxCode {
 
 impl Loc for JavaCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Java::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
-        let kind_id: Java = node.kind_id().into();
+        let kind_id: Java = Java::from(node.kind_id());
         // LLOC in Java is counted for statements only
         // https://docs.oracle.com/javase/tutorial/java/nutsandbolts/expressions.html
         match kind_id {
-            Program => {}
-            LineComment | BlockComment => {
+            Java::Program => {}
+            Java::LineComment | Java::BlockComment => {
                 add_cloc_lines(stats, start, end);
             }
-            AssertStatement | BreakStatement | ContinueStatement | DoStatement
-            | EnhancedForStatement | ExpressionStatement | ForStatement | IfStatement
-            | ReturnStatement | SwitchExpression | ThrowStatement | TryStatement
-            | WhileStatement => {
+            Java::AssertStatement
+            | Java::BreakStatement
+            | Java::ContinueStatement
+            | Java::DoStatement
+            | Java::EnhancedForStatement
+            | Java::ExpressionStatement
+            | Java::ForStatement
+            | Java::IfStatement
+            | Java::ReturnStatement
+            | Java::SwitchExpression
+            | Java::ThrowStatement
+            | Java::TryStatement
+            | Java::WhileStatement => {
                 stats.lloc.logical_lines += 1;
             }
-            LocalVariableDeclaration => {
+            Java::LocalVariableDeclaration => {
                 if node.count_specific_ancestors::<JavaParser>(
-                    |node| node.kind_id() == ForStatement,
-                    |node| node.kind_id() == Block,
+                    |node| node.kind_id() == Java::ForStatement as u16,
+                    |node| node.kind_id() == Java::Block as u16,
                 ) == 0
                 {
                     // The initializer, condition, and increment in a for loop are expressions.
@@ -733,49 +778,114 @@ impl Loc for JavaCode {
 
 impl Loc for RustCode {
     fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
-        use Rust::*;
-
         let (start, end) = init(node, stats, is_func_space, is_unit);
 
-        match node.kind_id().into() {
-            StringLiteral
-            | RawStringLiteral
-            | Block
-            | SourceFile
-            | SLASH
-            | SLASHSLASH
-            | SLASHSTAR
-            | STARSLASH
-            | OuterDocCommentMarker
-            | OuterDocCommentMarker2
-            | DocComment
-            | InnerDocCommentMarker
-            | BANG => {}
-            BlockComment => {
+        match Rust::from(node.kind_id()) {
+            Rust::StringLiteral
+            | Rust::RawStringLiteral
+            | Rust::Block
+            | Rust::SourceFile
+            | Rust::SLASH
+            | Rust::SLASHSLASH
+            | Rust::SLASHSTAR
+            | Rust::STARSLASH
+            | Rust::OuterDocCommentMarker
+            | Rust::OuterDocCommentMarker2
+            | Rust::DocComment
+            | Rust::InnerDocCommentMarker
+            | Rust::BANG => {}
+            Rust::BlockComment => {
                 add_cloc_lines(stats, start, end);
             }
-            LineComment => {
+            Rust::LineComment => {
                 // Exclude the last line for `LineComment` containing a `DocComment`,
                 // since the `DocComment` includes the newline,
                 // as explained here: https://github.com/tree-sitter/tree-sitter-rust/blob/2eaf126458a4d6a69401089b6ba78c5e5d6c1ced/src/scanner.c#L194-L195
-                let end = if node.is_child(DocComment as u16) {
+                let end = if node.is_child(Rust::DocComment as u16) {
                     end - 1
                 } else {
                     end
                 };
                 add_cloc_lines(stats, start, end);
             }
-            Statement
-            | EmptyStatement
-            | ExpressionStatement
-            | LetDeclaration
-            | AssignmentExpression
-            | CompoundAssignmentExpr => {
+            Rust::Statement
+            | Rust::EmptyStatement
+            | Rust::ExpressionStatement
+            | Rust::LetDeclaration
+            | Rust::AssignmentExpression
+            | Rust::CompoundAssignmentExpr => {
                 stats.lloc.logical_lines += 1;
             }
             _ => {
                 check_comment_ends_on_code_line(stats, start);
                 stats.ploc.lines.insert(start);
+            }
+        }
+    }
+}
+
+impl Loc for CppCode {
+    fn compute(node: &Node, stats: &mut Stats, is_func_space: bool, is_unit: bool) {
+        let (start, end) = init(node, stats, is_func_space, is_unit);
+
+        match Cpp::from(node.kind_id()) {
+            Cpp::RawStringLiteral
+            | Cpp::StringLiteral
+            | Cpp::DeclarationList
+            | Cpp::FieldDeclarationList
+            | Cpp::TranslationUnit => {}
+            Cpp::Comment => {
+                add_cloc_lines(stats, start, end);
+            }
+            Cpp::DoStatement
+            | Cpp::ForRangeLoop
+            | Cpp::WhileStatement
+            | Cpp::SwitchStatement
+            | Cpp::CaseStatement
+            | Cpp::IfStatement
+            | Cpp::ForStatement
+            | Cpp::ReturnStatement
+            | Cpp::BreakStatement
+            | Cpp::ContinueStatement
+            | Cpp::GotoStatement
+            | Cpp::ThrowStatement
+            | Cpp::TryStatement
+            | Cpp::TryStatement2
+            | Cpp::ExpressionStatement
+            | Cpp::ExpressionStatement2
+            | Cpp::LabeledStatement
+            | Cpp::StatementIdentifier => {
+                stats.lloc.logical_lines += 1;
+            }
+            Cpp::Declaration | Cpp::Declaration2 | Cpp::Declaration3 | Cpp::Declaration4 => {
+                if node.count_specific_ancestors::<CppParser>(
+                    |node| {
+                        matches!(
+                            Cpp::from(node.kind_id()),
+                            Cpp::WhileStatement
+                                | Cpp::ForStatement
+                                | Cpp::ForRangeLoop
+                                | Cpp::IfStatement
+                        )
+                    },
+                    |node| node.kind_id() == Cpp::CompoundStatement as u16,
+                ) == 0
+                {
+                    stats.lloc.logical_lines += 1;
+                }
+            }
+            _ => {
+                check_comment_ends_on_code_line(stats, start);
+                stats.ploc.lines.insert(start);
+
+                // As reported here: https://github.com/tree-sitter/tree-sitter-cpp/issues/276
+                // `tree-sitter-cpp` doesn't expand macros, providing a single `preproc_arg` node for the entire macro argument.
+                // Therefore, all lines from `start_row` to `end_row` must be added to PLOC to account for the unexpanded macro content
+                if node.kind_id() == Cpp::PreprocArg as u16 {
+                    (node.start_row() + 1..=node.end_row()).for_each(|line| {
+                        stats.ploc.lines.insert(line);
+                    });
+                }
             }
         }
     }

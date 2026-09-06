@@ -15,7 +15,13 @@ impl Tree {
             .set_language(&T::get_lang().get_ts_language())
             .unwrap();
 
-        Self(parser.parse(code, None).unwrap())
+        let tree = parser.parse(code, None).unwrap();
+        if T::get_lang() == crate::LANG::Cpp
+            && let Some(normalized) = crate::cpp::normalize_format_macros(tree.root_node(), code)
+        {
+            return Self(parser.parse(&normalized, None).unwrap());
+        }
+        Self(tree)
     }
 
     pub(crate) fn get_root(&self) -> Node<'_> {
@@ -39,10 +45,6 @@ impl<'a> Node<'a> {
 
     pub(crate) fn id(&self) -> usize {
         self.0.id()
-    }
-
-    pub(crate) fn kind(&self) -> &'static str {
-        self.0.kind()
     }
 
     pub(crate) fn kind_id(&self) -> u16 {

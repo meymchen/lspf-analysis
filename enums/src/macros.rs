@@ -24,6 +24,7 @@ macro_rules! mk_get_language {
                 Lang::Javascript => tree_sitter_javascript::LANGUAGE.into(),
                 Lang::Python => tree_sitter_python::LANGUAGE.into(),
                 Lang::Java => tree_sitter_java::LANGUAGE.into(),
+                Lang::Cpp => tree_sitter_cpp::LANGUAGE.into(),
                 Lang::Rust => tree_sitter_rust::LANGUAGE.into(),
             }
         }

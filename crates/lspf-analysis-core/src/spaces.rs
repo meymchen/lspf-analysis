@@ -347,9 +347,9 @@ pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Func
             T::Halstead::compute(&node, code, &mut state.halstead_maps);
             T::Loc::compute(&node, &mut last.metrics.loc, func_space, unit);
             T::Nom::compute(&node, &mut last.metrics.nom);
-            T::NArgs::compute(&node, &mut last.metrics.nargs);
+            T::NArgs::compute(&node, &mut last.metrics.nargs, code);
             T::Exit::compute(&node, &mut last.metrics.nexits);
-            T::Abc::compute(&node, &mut last.metrics.abc);
+            T::Abc::compute_source(&node, code, &mut last.metrics.abc);
             T::Npm::compute(&node, &mut last.metrics.npm);
             T::Npa::compute(&node, &mut last.metrics.npa);
         }
@@ -371,6 +371,9 @@ pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Func
     finalize::<T>(&mut state_stack, usize::MAX);
 
     state_stack.pop().map(|mut state| {
+        if matches!(parser.get_language(), crate::LANG::Cpp) {
+            crate::cpp::compute_class_metrics(node, code, &mut state.space);
+        }
         state.space.name = path.to_str().map(|name| name.to_string());
         state.space
     })

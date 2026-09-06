@@ -26,7 +26,8 @@ import {
     type ServerOptions,
 } from 'vscode-languageclient/node';
 
-import { connectToServer, debugServerPort } from './debug.js';
+import { connectToServer, connectToWebSocketServer, debugServerPort, debugServerTransport } from './debug.js';
+import { followServerLog } from './serverLog.js';
 import {
     FUNCTION_HEALTH_METHOD,
     isFunctionHealth,
@@ -71,6 +72,7 @@ const LANGUAGES = [
     'javascript',
     'javascriptreact',
     'python',
+    'cpp',
     'rust',
     'typescript',
     'typescriptreact',
@@ -80,6 +82,7 @@ const LANGUAGES = [
 const FUNCTIONS_VIEW = `${SECTION}.functions`;
 
 let client: LanguageClient | undefined;
+let outputChannel: import('vscode').OutputChannel;
 
 /** The latest file summary per document, keyed by URI. */
 const reports = new Map<string, FileHealth>();
@@ -148,6 +151,13 @@ export async function activate(context: ExtensionContext): Promise<void> {
     // Before anything renders: until this runs, every string is the English
     // it was written in.
     useTranslator(l10n.t);
+
+    outputChannel = window.createOutputChannel('LSPF Analysis');
+    context.subscriptions.push(outputChannel);
+    const debugLog = process.env.LSPF_ANALYSIS_DEBUG_LOG;
+    if (debugServerPort(process.env) !== undefined && debugLog) {
+        context.subscriptions.push(followServerLog(debugLog, outputChannel));
+    }
 
     tree = new FunctionHealthProvider(fetchFunctionHealth, analyzableUri);
     setSort('quality');
@@ -267,7 +277,8 @@ function refreshStatus(): void {
 function serverOptionsFor(context: ExtensionContext): ServerOptions | undefined {
     const port = debugServerPort(process.env);
     if (port !== undefined) {
-        return () => connectToServer(port);
+        const connect = debugServerTransport(process.env) === 'ws' ? connectToWebSocketServer : connectToServer;
+        return () => connect(port);
     }
 
     const resolved = resolveServerBinary({
@@ -284,7 +295,12 @@ function serverOptionsFor(context: ExtensionContext): ServerOptions | undefined 
         args: ['serve', '--stdio'],
         transport: TransportKind.stdio,
         options: {
-            env: { ...process.env, RUST_LOG: process.env.RUST_LOG ?? 'info' },
+            env: {
+                ...process.env,
+                // Stdio stderr is captured by LanguageClient into our Output Channel.
+                LSPF_ANALYSIS_LOG_FILE: undefined,
+                RUST_LOG: process.env.RUST_LOG ?? (context.extensionMode === ExtensionMode.Development ? 'debug' : 'info'),
+            },
         },
     };
 }
@@ -304,7 +320,8 @@ async function start(context: ExtensionContext): Promise<void> {
         // Settings the server can use before the first document arrives,
         // ahead of the push that follows initialization.
         initializationOptions: { [SECTION]: settingsPayload() },
-        outputChannelName: 'LSPF Analysis',
+        outputChannel,
+        traceOutputChannel: outputChannel,
         middleware: {
             workspace: {
                 // The default push sends the configuration section verbatim,

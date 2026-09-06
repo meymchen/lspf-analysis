@@ -41,9 +41,17 @@
       "label": "prepare extension development host",
       "dependsOrder": "sequence",
       "dependsOn": [
-        "build language server",
         "install extension dependencies",
         "bundle extension"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "prepare debug session",
+      "dependsOrder": "sequence",
+      "dependsOn": [
+        "build language server",
+        "prepare extension development host"
       ],
       "problemMatcher": []
     },

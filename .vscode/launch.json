@@ -2,7 +2,31 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug language server",
+      "name": "stdio",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--disable-extensions",
+        "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
+      ],
+      "outFiles": [
+        "${workspaceFolder}/clients/vscode/dist/**/*.js"
+      ],
+      "env": {
+        "LSPF_ANALYSIS_DEBUG_PORT": null,
+        "LSPF_ANALYSIS_DEBUG_TCP": null,
+        "LSPF_ANALYSIS_DEBUG_TRANSPORT": null,
+        "LSPF_ANALYSIS_DEBUG_LOG": null,
+        "RUST_LOG": "debug"
+      },
+      "preLaunchTask": "prepare debug session",
+      "presentation": {
+        "group": "transports",
+        "order": 1
+      }
+    },
+    {
+      "name": "tcp server",
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/lspf-analysis",
@@ -13,19 +37,18 @@
       ],
       "cwd": "${workspaceFolder}",
       "env": {
-        "RUST_LOG": "lspf=debug,lspf_analysis=debug"
+        "RUST_LOG": "debug"
       },
       "sourceLanguages": [
         "rust"
       ],
-      "preLaunchTask": "build language server",
       "presentation": {
-        "group": "2_parts",
-        "order": 1
-      }
+        "hidden": true
+      },
+      "terminal": "integrated"
     },
     {
-      "name": "Run extension against the debugged server",
+      "name": "tcp extension host",
       "type": "extensionHost",
       "request": "launch",
       "args": [
@@ -36,16 +59,39 @@
         "${workspaceFolder}/clients/vscode/dist/**/*.js"
       ],
       "env": {
-        "LSPF_ANALYSIS_DEBUG_TCP": "9257"
+        "LSPF_ANALYSIS_DEBUG_PORT": "9257",
+        "LSPF_ANALYSIS_DEBUG_TRANSPORT": "tcp",
+        "LSPF_ANALYSIS_DEBUG_TCP": null,
+        "LSPF_ANALYSIS_DEBUG_LOG": null
       },
-      "preLaunchTask": "bundle extension",
       "presentation": {
-        "group": "2_parts",
-        "order": 2
+        "hidden": true
       }
     },
     {
-      "name": "Run language extension",
+      "name": "websocket server",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/lspf-analysis",
+      "args": [
+        "serve",
+        "--ws",
+        "127.0.0.1:9258"
+      ],
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "RUST_LOG": "debug"
+      },
+      "sourceLanguages": [
+        "rust"
+      ],
+      "presentation": {
+        "hidden": true
+      },
+      "terminal": "integrated"
+    },
+    {
+      "name": "websocket extension host",
       "type": "extensionHost",
       "request": "launch",
       "args": [
@@ -55,25 +101,42 @@
       "outFiles": [
         "${workspaceFolder}/clients/vscode/dist/**/*.js"
       ],
-      "preLaunchTask": "prepare extension development host",
+      "env": {
+        "LSPF_ANALYSIS_DEBUG_PORT": "9258",
+        "LSPF_ANALYSIS_DEBUG_TRANSPORT": "ws",
+        "LSPF_ANALYSIS_DEBUG_TCP": null,
+        "LSPF_ANALYSIS_DEBUG_LOG": null
+      },
       "presentation": {
-        "group": "1_main",
-        "order": 2
+        "hidden": true
       }
     }
   ],
   "compounds": [
     {
-      "name": "Debug extension and server",
+      "name": "tcp",
       "configurations": [
-        "Debug language server",
-        "Run extension against the debugged server"
+        "tcp server",
+        "tcp extension host"
       ],
-      "preLaunchTask": "install extension dependencies",
+      "preLaunchTask": "prepare debug session",
       "stopAll": true,
       "presentation": {
-        "group": "1_main",
-        "order": 1
+        "group": "transports",
+        "order": 2
+      }
+    },
+    {
+      "name": "websocket",
+      "configurations": [
+        "websocket server",
+        "websocket extension host"
+      ],
+      "preLaunchTask": "prepare debug session",
+      "stopAll": true,
+      "presentation": {
+        "group": "transports",
+        "order": 3
       }
     }
   ]

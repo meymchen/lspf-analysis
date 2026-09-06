@@ -7,11 +7,13 @@ use std::fmt;
 use crate::checker::Checker;
 use crate::*;
 
+mod cpp_macros;
 mod recursion;
 mod rust_macros;
 
 /// Additional context for metrics that cannot be derived from a single AST node.
 pub(crate) struct FileContext {
+    language: LANG,
     recursive: std::collections::HashSet<usize>,
     macros: Option<rust_macros::Macros>,
 }
@@ -19,6 +21,7 @@ pub(crate) struct FileContext {
 impl FileContext {
     pub(crate) fn new(root: Node, code: &[u8], language: LANG) -> Self {
         Self {
+            language,
             recursive: recursion::functions(root, code, language),
             macros: matches!(language, LANG::Rust).then(|| rust_macros::Macros::new(root, code)),
         }
@@ -31,10 +34,14 @@ impl FileContext {
         stats: &mut Stats,
         nesting_map: &HashMap<usize, (usize, usize, usize)>,
     ) {
+        if matches!(self.language, LANG::Cpp) && node.kind_id() == Cpp::PreprocArg as u16 {
+            cpp_macros::compute(node, code, stats, nesting_map[&node.id()]);
+        }
         if self.recursive.contains(&node.id()) {
             increment_by_one(stats);
         }
-        if node.kind() == "macro_invocation"
+        if matches!(self.language, LANG::Rust)
+            && node.kind_id() == Rust::MacroInvocation as u16
             && let Some(macros) = &self.macros
         {
             macros.compute(node, code, stats, nesting_map[&node.id()]);
@@ -164,7 +171,8 @@ fn compute_booleans<T: std::cmp::PartialEq + std::convert::From<u16>>(
     typs2: T,
 ) {
     for child in node.children() {
-        if typs1 == child.kind_id().into() || typs2 == child.kind_id().into() {
+        let kind = T::from(child.kind_id());
+        if typs1 == kind || typs2 == kind {
             stats.structural = stats
                 .boolean_seq
                 .eval_based_on_prev(child.kind_id(), stats.structural)
@@ -239,7 +247,7 @@ fn increment_function_depth<T: std::cmp::PartialEq + std::convert::From<u16>>(
     // Increase depth function nesting if needed
     let mut child = *node;
     while let Some(parent) = child.parent() {
-        if stop == parent.kind_id().into() {
+        if stop == T::from(parent.kind_id()) {
             *depth += 1;
             break;
         }
@@ -261,65 +269,69 @@ impl Cognitive for PythonCode {
         stats: &mut Stats,
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
-        use Python::*;
-
         // Get nesting of the parent
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
-        match node.kind_id().into() {
-            IfStatement | ForStatement | WhileStatement | ConditionalExpression => {
+        match Python::from(node.kind_id()) {
+            Python::IfStatement
+            | Python::ForStatement
+            | Python::WhileStatement
+            | Python::ConditionalExpression => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
-            ElifClause => {
+            Python::ElifClause => {
                 // No nesting increment for them because their cost has already
                 // been paid by the if construct
                 increment_by_one(stats);
                 // Reset the boolean sequence
                 stats.boolean_seq.reset();
             }
-            ElseClause | FinallyClause => {
+            Python::ElseClause | Python::FinallyClause => {
                 // No nesting increment for them because their cost has already
                 // been paid by the if construct
                 increment_by_one(stats);
             }
-            ExceptClause => {
+            Python::ExceptClause => {
                 nesting += 1;
                 increment(stats);
             }
-            ExpressionList | ExpressionStatement | Tuple => {
+            Python::ExpressionList | Python::ExpressionStatement | Python::Tuple => {
                 stats.boolean_seq.reset();
             }
-            NotOperator => {
+            Python::NotOperator => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
-            BooleanOperator => {
+            Python::BooleanOperator => {
                 if node.count_specific_ancestors::<PythonParser>(
-                    |node| node.kind_id() == BooleanOperator,
-                    |node| node.kind_id() == Lambda,
+                    |node| node.kind_id() == Python::BooleanOperator as u16,
+                    |node| node.kind_id() == Python::Lambda as u16,
                 ) == 0
                 {
                     stats.structural += node.count_specific_ancestors::<PythonParser>(
-                        |node| node.kind_id() == Lambda,
+                        |node| node.kind_id() == Python::Lambda as u16,
                         |node| {
                             matches!(
-                                node.kind_id().into(),
-                                ExpressionList | IfStatement | ForStatement | WhileStatement
+                                Python::from(node.kind_id()),
+                                Python::ExpressionList
+                                    | Python::IfStatement
+                                    | Python::ForStatement
+                                    | Python::WhileStatement
                             )
                         },
                     );
                 }
-                compute_booleans::<language_python::Python>(node, stats, And, Or);
+                compute_booleans::<language_python::Python>(node, stats, Python::And, Python::Or);
             }
-            Lambda => {
+            Python::Lambda => {
                 // Increase lambda nesting
                 lambda += 1;
             }
-            FunctionDefinition => {
+            Python::FunctionDefinition => {
                 // Increase depth function nesting if needed
                 increment_function_depth::<language_python::Python>(
                     &mut depth,
                     node,
-                    FunctionDefinition,
+                    Python::FunctionDefinition,
                 );
             }
             _ => {}
@@ -335,41 +347,40 @@ impl Cognitive for RustCode {
         stats: &mut Stats,
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
-        use Rust::*;
         let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
-        match node.kind_id().into() {
-            IfExpression => {
+        match Rust::from(node.kind_id()) {
+            Rust::IfExpression => {
                 // Check if a node is not an else-if
                 if !Self::is_else_if(node) {
                     increase_nesting(stats,&mut nesting, depth, lambda);
                 }
             }
-            ForExpression | WhileExpression | MatchExpression => {
+            Rust::ForExpression | Rust::WhileExpression | Rust::MatchExpression => {
                 increase_nesting(stats,&mut nesting, depth, lambda);
             }
-            Else /*else-if also */ => {
+            Rust::Else /*else-if also */ => {
                 increment_by_one(stats);
             }
-            BreakExpression | ContinueExpression => {
+            Rust::BreakExpression | Rust::ContinueExpression => {
                 if let Some(label_child) = node.child(1)
-                    && let Label = label_child.kind_id().into()
+                    && let Rust::Label = Rust::from(label_child.kind_id())
                 {
                     increment_by_one(stats);
                 }
             }
-            UnaryExpression => {
+            Rust::UnaryExpression => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
-            BinaryExpression => {
-                compute_booleans::<language_rust::Rust>(node, stats, AMPAMP, PIPEPIPE);
+            Rust::BinaryExpression => {
+                compute_booleans::<language_rust::Rust>(node, stats, Rust::AMPAMP, Rust::PIPEPIPE);
             }
-            FunctionItem  => {
+            Rust::FunctionItem  => {
                 nesting = 0;
                 // Increase depth function nesting if needed
-                increment_function_depth::<language_rust::Rust>(&mut depth, node, FunctionItem);
+                increment_function_depth::<language_rust::Rust>(&mut depth, node, Rust::FunctionItem);
             }
-            ClosureExpression => {
+            Rust::ClosureExpression => {
                 lambda += 1;
             }
             _ => {}
@@ -384,29 +395,27 @@ impl Cognitive for JavaCode {
         stats: &mut Stats,
         nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
     ) {
-        use Java::*;
-
         let (mut nesting, depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
-        match node.kind_id().into() {
-            IfStatement => {
+        match Java::from(node.kind_id()) {
+            Java::IfStatement => {
                 if !Self::is_else_if(node) {
                     increase_nesting(stats, &mut nesting, depth, lambda);
                 }
             }
-            ForStatement | WhileStatement | DoStatement | SwitchBlock | CatchClause => {
+            Java::ForStatement | Java::WhileStatement | Java::DoStatement | Java::SwitchBlock | Java::CatchClause => {
                 increase_nesting(stats, &mut nesting, depth, lambda);
             }
-            Else /* else-if also */ => {
+            Java::Else /* else-if also */ => {
                 increment_by_one(stats);
             }
-            UnaryExpression => {
+            Java::UnaryExpression => {
                 stats.boolean_seq.not_operator(node.kind_id());
             }
-            BinaryExpression => {
-                compute_booleans::<language_java::Java>(node, stats, AMPAMP, PIPEPIPE);
+            Java::BinaryExpression => {
+                compute_booleans::<language_java::Java>(node, stats, Java::AMPAMP, Java::PIPEPIPE);
             }
-            LambdaExpression => {
+            Java::LambdaExpression => {
                 lambda += 1;
             }
             _ => {}
@@ -418,39 +427,39 @@ impl Cognitive for JavaCode {
 macro_rules! js_cognitive {
     ($lang:ident) => {
         fn compute(node: &Node, stats: &mut Stats, nesting_map: &mut HashMap<usize, (usize, usize, usize)>) {
-            use $lang::*;
+
             let (mut nesting, mut depth, mut lambda) = get_nesting_from_map(node, nesting_map);
 
-            match node.kind_id().into() {
-                IfStatement => {
+            match $lang::from(node.kind_id()) {
+                $lang::IfStatement => {
                     if !Self::is_else_if(&node) {
                         increase_nesting(stats,&mut nesting, depth, lambda);
                     }
                 }
-                ForStatement | ForInStatement | WhileStatement | DoStatement | SwitchStatement | CatchClause | TernaryExpression => {
+                $lang::ForStatement | $lang::ForInStatement | $lang::WhileStatement | $lang::DoStatement | $lang::SwitchStatement | $lang::CatchClause | $lang::TernaryExpression => {
                     increase_nesting(stats,&mut nesting, depth, lambda);
                 }
-                Else /* else-if also */ => {
+                $lang::Else /* else-if also */ => {
                     increment_by_one(stats);
                 }
-                ExpressionStatement => {
+                $lang::ExpressionStatement => {
                     // Reset the boolean sequence
                     stats.boolean_seq.reset();
                 }
-                UnaryExpression => {
+                $lang::UnaryExpression => {
                     stats.boolean_seq.not_operator(node.kind_id());
                 }
-                BinaryExpression => {
-                    compute_booleans::<$lang>(node, stats, AMPAMP, PIPEPIPE);
+                $lang::BinaryExpression => {
+                    compute_booleans::<$lang>(node, stats, $lang::AMPAMP, $lang::PIPEPIPE);
                 }
-                FunctionDeclaration => {
+                $lang::FunctionDeclaration => {
                     // Reset lambda nesting at function for JS
                     nesting = 0;
                     lambda = 0;
                     // Increase depth function nesting if needed
-                    increment_function_depth::<$lang>(&mut depth, node, FunctionDeclaration);
+                    increment_function_depth::<$lang>(&mut depth, node, $lang::FunctionDeclaration);
                 }
-                ArrowFunction => {
+                $lang::ArrowFunction => {
                     lambda += 1;
                 }
                 _ => {}
@@ -470,6 +479,99 @@ impl Cognitive for TypescriptCode {
 
 impl Cognitive for TsxCode {
     js_cognitive!(Tsx);
+}
+
+impl Cognitive for CppCode {
+    fn compute(
+        node: &Node,
+        stats: &mut Stats,
+        nesting_map: &mut HashMap<usize, (usize, usize, usize)>,
+    ) {
+        let (mut nesting, depth, mut lambda) = get_nesting_from_map(node, nesting_map);
+        match Cpp::from(node.kind_id()) {
+            Cpp::FunctionDefinition
+            | Cpp::FunctionDefinition2
+            | Cpp::FunctionDefinition3
+            | Cpp::FunctionDefinition4 => {
+                nesting = 0;
+                lambda = 0;
+                stats.boolean_seq.reset();
+            }
+            Cpp::IfStatement if !Self::is_else_if(node) => {
+                increase_nesting(stats, &mut nesting, depth, lambda)
+            }
+            Cpp::ForStatement
+            | Cpp::ForRangeLoop
+            | Cpp::WhileStatement
+            | Cpp::DoStatement
+            | Cpp::SwitchStatement
+            | Cpp::CatchClause
+            | Cpp::ConditionalExpression => increase_nesting(stats, &mut nesting, depth, lambda),
+            Cpp::GotoStatement | Cpp::Else => increment_by_one(stats),
+            Cpp::LambdaExpression => lambda += 1,
+            Cpp::BinaryExpression | Cpp::BinaryExpression2 => {
+                // Count each logical sequence from its expression root in source order.
+                if !node.parent().is_some_and(|p| {
+                    matches!(
+                        Cpp::from(p.kind_id()),
+                        Cpp::BinaryExpression
+                            | Cpp::BinaryExpression2
+                            | Cpp::ParenthesizedExpression
+                            | Cpp::ParenthesizedExpression2
+                    )
+                }) {
+                    cpp_booleans(*node, stats);
+                }
+            }
+            Cpp::ParenthesizedExpression | Cpp::ParenthesizedExpression2
+                if !node.parent().is_some_and(|p| {
+                    matches!(
+                        Cpp::from(p.kind_id()),
+                        Cpp::BinaryExpression
+                            | Cpp::BinaryExpression2
+                            | Cpp::ParenthesizedExpression
+                            | Cpp::ParenthesizedExpression2
+                    )
+                }) =>
+            {
+                cpp_booleans(*node, stats)
+            }
+            _ => {}
+        }
+        nesting_map.insert(node.id(), (nesting, depth, lambda));
+    }
+}
+
+fn cpp_booleans(node: Node, stats: &mut Stats) {
+    fn visit(node: Node, previous: &mut Option<bool>, count: &mut usize) {
+        if !matches!(
+            Cpp::from(node.kind_id()),
+            Cpp::BinaryExpression
+                | Cpp::BinaryExpression2
+                | Cpp::ParenthesizedExpression
+                | Cpp::ParenthesizedExpression2
+        ) {
+            return;
+        }
+        for child in node.children() {
+            let operator = match Cpp::from(child.kind_id()) {
+                Cpp::AMPAMP | Cpp::And => Some(true),
+                Cpp::PIPEPIPE | Cpp::Or => Some(false),
+                _ => None,
+            };
+            if let Some(operator) = operator {
+                if *previous != Some(operator) {
+                    *count += 1;
+                }
+                *previous = Some(operator);
+            } else {
+                visit(child, previous, count);
+            }
+        }
+    }
+    let mut count = 0;
+    visit(node, &mut None, &mut count);
+    stats.structural += count;
 }
 
 #[cfg(test)]

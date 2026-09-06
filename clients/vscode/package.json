@@ -33,6 +33,7 @@
   "main": "./dist/extension.js",
   "l10n": "./l10n",
   "activationEvents": [
+    "onLanguage:cpp",
     "onLanguage:java",
     "onLanguage:javascript",
     "onLanguage:javascriptreact",
@@ -245,6 +246,7 @@
   "scripts": {
     "compile": "tsc -p .",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
+    "test:debug-transport": "cargo build --manifest-path ../../Cargo.toml -p lspf-analysis && npm run compile && node --test out/test/debugServer.integration.js",
     "bundle": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "prepare:server": "node scripts/prepareServer.mjs",
@@ -252,13 +254,17 @@
     "vscode:prepublish": "npm run bundle"
   },
   "dependencies": {
-    "vscode-languageclient": "^9.0.1"
+    "vscode-languageclient": "^9.0.1",
+    "vscode-ws-jsonrpc": "^3.5.0",
+    "ws": "^8.21.3"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/vscode": "^1.90.0",
+    "@types/ws": "^8.18.1",
     "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.25.0",
-    "typescript": "^5.9.0"
+    "typescript": "^5.9.0",
+    "vscode-jsonrpc": "~8.2.1"
   }
 }

@@ -115,7 +115,7 @@ where
 
 impl Exit for PythonCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Python::ReturnStatement) {
+        if node.kind_id() == Python::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }
@@ -123,7 +123,7 @@ impl Exit for PythonCode {
 
 impl Exit for JavascriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Javascript::ReturnStatement) {
+        if node.kind_id() == Javascript::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }
@@ -131,7 +131,7 @@ impl Exit for JavascriptCode {
 
 impl Exit for TypescriptCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Typescript::ReturnStatement) {
+        if node.kind_id() == Typescript::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }
@@ -139,7 +139,7 @@ impl Exit for TypescriptCode {
 
 impl Exit for TsxCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Tsx::ReturnStatement) {
+        if node.kind_id() == Tsx::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }
@@ -147,7 +147,7 @@ impl Exit for TsxCode {
 
 impl Exit for JavaCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        if matches!(node.kind_id().into(), Java::ReturnStatement) {
+        if node.kind_id() == Java::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }
@@ -156,10 +156,18 @@ impl Exit for JavaCode {
 impl Exit for RustCode {
     fn compute(node: &Node, stats: &mut Stats) {
         if matches!(
-            node.kind_id().into(),
+            Rust::from(node.kind_id()),
             Rust::ReturnExpression | Rust::TryExpression
         ) || Self::is_func(node) && node.child_by_field_name("return_type").is_some()
         {
+            stats.exit += 1;
+        }
+    }
+}
+
+impl Exit for CppCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        if node.kind_id() == Cpp::ReturnStatement as u16 {
             stats.exit += 1;
         }
     }

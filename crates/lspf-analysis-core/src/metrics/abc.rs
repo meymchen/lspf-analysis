@@ -7,6 +7,8 @@ use crate::macros::implement_metric_trait;
 use crate::node::Node;
 use crate::*;
 
+mod cpp;
+
 /// The `ABC` metric.
 ///
 /// The `ABC` metric measures the size of a source code by counting
@@ -43,7 +45,7 @@ pub struct Stats {
     declaration: Vec<DeclKind>,
     /// Whether a language actually counted anything into this.
     ///
-    /// Only [`JavaCode`] implements [`Abc`] — the other grammars this fork
+    /// [`JavaCode`] and [`CppCode`] implement [`Abc`] — the other grammars this fork
     /// carries get the no-op implementation — so without this flag their
     /// reports would carry a full set of zeros that looks computed.
     /// [`Wmc`](crate::wmc), [`Npm`](crate::npm) and [`Npa`](crate::npa) hide
@@ -287,6 +289,10 @@ where
     /// An implementation must call `Stats::enable`, or what it counts is
     /// treated as never having been computed and stays out of the report.
     fn compute(node: &Node, stats: &mut Stats);
+
+    fn compute_source(node: &Node, _code: &[u8], stats: &mut Stats) {
+        Self::compute(node, stats);
+    }
 }
 
 // Fitzpatrick, Jerry (1997). "Applying the ABC metric to C, C++ and Java". C++ Report.
@@ -295,29 +301,38 @@ where
 // ABC Java example: (page 15, listing 4)
 impl Abc for JavaCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        use Java::*;
-
         stats.enable();
 
-        match node.kind_id().into() {
-            STAREQ | SLASHEQ | PERCENTEQ | DASHEQ | PLUSEQ | LTLTEQ | GTGTEQ | AMPEQ | PIPEEQ
-            | CARETEQ | GTGTGTEQ | PLUSPLUS | DASHDASH => {
+        match Java::from(node.kind_id()) {
+            Java::STAREQ
+            | Java::SLASHEQ
+            | Java::PERCENTEQ
+            | Java::DASHEQ
+            | Java::PLUSEQ
+            | Java::LTLTEQ
+            | Java::GTGTEQ
+            | Java::AMPEQ
+            | Java::PIPEEQ
+            | Java::CARETEQ
+            | Java::GTGTGTEQ
+            | Java::PLUSPLUS
+            | Java::DASHDASH => {
                 stats.assignments += 1.;
             }
-            FieldDeclaration | LocalVariableDeclaration => {
+            Java::FieldDeclaration | Java::LocalVariableDeclaration => {
                 stats.declaration.push(DeclKind::Var);
             }
-            Final => {
+            Java::Final => {
                 if let Some(DeclKind::Var) = stats.declaration.last() {
                     stats.declaration.push(DeclKind::Const);
                 }
             }
-            SEMI => {
+            Java::SEMI => {
                 if let Some(DeclKind::Const | DeclKind::Var) = stats.declaration.last() {
                     stats.declaration.clear();
                 }
             }
-            EQ => {
+            Java::EQ => {
                 // Excludes constant declarations
                 stats
                     .declaration
@@ -331,88 +346,101 @@ impl Abc for JavaCode {
                         stats.assignments += 1.;
                     });
             }
-            MethodInvocation | New => {
+            Java::MethodInvocation | Java::New => {
                 stats.branches += 1.;
             }
-            GTEQ | LTEQ | EQEQ | BANGEQ | Else | Case | Default | QMARK | Try | Catch => {
+            Java::GTEQ
+            | Java::LTEQ
+            | Java::EQEQ
+            | Java::BANGEQ
+            | Java::Else
+            | Java::Case
+            | Java::Default
+            | Java::QMARK
+            | Java::Try
+            | Java::Catch => {
                 stats.conditions += 1.;
             }
-            GT | LT => {
+            Java::GT | Java::LT => {
                 // Excludes `<` and `>` used for generic types
                 if let Some(parent) = node.parent()
-                    && !matches!(parent.kind_id().into(), TypeArguments)
+                    && parent.kind_id() != Java::TypeArguments as u16
                 {
                     stats.conditions += 1.;
                 }
             }
             // Counts unary conditions in elements separated by `&&` or `||` boolean operators
-            AMPAMP | PIPEPIPE => {
+            Java::AMPAMP | Java::PIPEPIPE => {
                 if let Some(parent) = node.parent() {
                     java_count_unary_conditions(&parent, &mut stats.conditions);
                 }
             }
             // Counts unary conditions among method arguments
-            ArgumentList => {
+            Java::ArgumentList => {
                 java_count_unary_conditions(node, &mut stats.conditions);
             }
             // Counts unary conditions inside assignments
-            VariableDeclarator | AssignmentExpression => {
+            Java::VariableDeclarator | Java::AssignmentExpression => {
                 // The child node of index 2 contains the right operand of an assignment operation
                 if let Some(right_operand) = node.child(2)
                     && matches!(
-                        right_operand.kind_id().into(),
-                        ParenthesizedExpression | UnaryExpression
+                        Java::from(right_operand.kind_id()),
+                        Java::ParenthesizedExpression | Java::UnaryExpression
                     )
                 {
                     java_inspect_container(&right_operand, &mut stats.conditions);
                 }
             }
             // Counts unary conditions inside if and while statements
-            IfStatement | WhileStatement => {
+            Java::IfStatement | Java::WhileStatement => {
                 // The child node of index 1 contains the condition
                 if let Some(condition) = node.child(1)
-                    && matches!(condition.kind_id().into(), ParenthesizedExpression)
+                    && condition.kind_id() == Java::ParenthesizedExpression as u16
                 {
                     java_inspect_container(&condition, &mut stats.conditions);
                 }
             }
             // Counts unary conditions do-while statements
-            DoStatement => {
+            Java::DoStatement => {
                 // The child node of index 3 contains the condition
                 if let Some(condition) = node.child(3)
-                    && matches!(condition.kind_id().into(), ParenthesizedExpression)
+                    && condition.kind_id() == Java::ParenthesizedExpression as u16
                 {
                     java_inspect_container(&condition, &mut stats.conditions);
                 }
             }
             // Counts unary conditions inside for statements
-            ForStatement => {
+            Java::ForStatement => {
                 // The child node of index 3 contains the `condition` when
                 // the initialization expression is a variable declaration
                 // e.g. `for ( int i=0; `condition`; ... ) {}`
                 if let Some(condition) = node.child(3) {
-                    match condition.kind_id().into() {
-                        SEMI => {
+                    match Java::from(condition.kind_id()) {
+                        Java::SEMI => {
                             // The child node of index 4 contains the `condition` when
                             // the initialization expression is not a variable declaration
                             // e.g. `for ( i=0; `condition`; ... ) {}`
                             if let Some(cond) = node.child(4) {
-                                match cond.kind_id().into() {
-                                    MethodInvocation | Identifier | True | False | SEMI
-                                    | RPAREN => {
+                                match Java::from(cond.kind_id()) {
+                                    Java::MethodInvocation
+                                    | Java::Identifier
+                                    | Java::True
+                                    | Java::False
+                                    | Java::SEMI
+                                    | Java::RPAREN => {
                                         stats.conditions += 1.;
                                     }
-                                    ParenthesizedExpression | UnaryExpression => {
+                                    Java::ParenthesizedExpression | Java::UnaryExpression => {
                                         java_inspect_container(&cond, &mut stats.conditions);
                                     }
                                     _ => {}
                                 }
                             }
                         }
-                        MethodInvocation | Identifier | True | False => {
+                        Java::MethodInvocation | Java::Identifier | Java::True | Java::False => {
                             stats.conditions += 1.;
                         }
-                        ParenthesizedExpression | UnaryExpression => {
+                        Java::ParenthesizedExpression | Java::UnaryExpression => {
                             java_inspect_container(&condition, &mut stats.conditions);
                         }
                         _ => {}
@@ -420,38 +448,38 @@ impl Abc for JavaCode {
                 }
             }
             // Counts unary conditions inside return statements
-            ReturnStatement => {
+            Java::ReturnStatement => {
                 // The child node of index 1 contains the return value
                 if let Some(value) = node.child(1)
                     && matches!(
-                        value.kind_id().into(),
-                        ParenthesizedExpression | UnaryExpression
+                        Java::from(value.kind_id()),
+                        Java::ParenthesizedExpression | Java::UnaryExpression
                     )
                 {
                     java_inspect_container(&value, &mut stats.conditions)
                 }
             }
             // Counts unary conditions inside implicit return statements in lambda expressions
-            LambdaExpression => {
+            Java::LambdaExpression => {
                 // The child node of index 2 contains the return value
                 if let Some(value) = node.child(2)
                     && matches!(
-                        value.kind_id().into(),
-                        ParenthesizedExpression | UnaryExpression
+                        Java::from(value.kind_id()),
+                        Java::ParenthesizedExpression | Java::UnaryExpression
                     )
                 {
                     java_inspect_container(&value, &mut stats.conditions)
                 }
             }
             // Counts unary conditions inside ternary expressions
-            TernaryExpression => {
+            Java::TernaryExpression => {
                 // The child node of index 0 contains the condition
                 if let Some(condition) = node.child(0) {
-                    match condition.kind_id().into() {
-                        MethodInvocation | Identifier | True | False => {
+                    match Java::from(condition.kind_id()) {
+                        Java::MethodInvocation | Java::Identifier | Java::True | Java::False => {
                             stats.conditions += 1.;
                         }
-                        ParenthesizedExpression | UnaryExpression => {
+                        Java::ParenthesizedExpression | Java::UnaryExpression => {
                             java_inspect_container(&condition, &mut stats.conditions);
                         }
                         _ => {}
@@ -460,8 +488,8 @@ impl Abc for JavaCode {
                 // The child node of index 2 contains the first expression
                 if let Some(expression) = node.child(2)
                     && matches!(
-                        expression.kind_id().into(),
-                        ParenthesizedExpression | UnaryExpression
+                        Java::from(expression.kind_id()),
+                        Java::ParenthesizedExpression | Java::UnaryExpression
                     )
                 {
                     java_inspect_container(&expression, &mut stats.conditions);
@@ -469,8 +497,8 @@ impl Abc for JavaCode {
                 // The child node of index 4 contains the second expression
                 if let Some(expression) = node.child(4)
                     && matches!(
-                        expression.kind_id().into(),
-                        ParenthesizedExpression | UnaryExpression
+                        Java::from(expression.kind_id()),
+                        Java::ParenthesizedExpression | Java::UnaryExpression
                     )
                 {
                     java_inspect_container(&expression, &mut stats.conditions);
@@ -483,17 +511,19 @@ impl Abc for JavaCode {
 
 // Inspects a container node to find and count the unary condition it holds
 fn java_inspect_container(container_node: &Node, conditions: &mut f64) {
-    use Java::*;
-
     let mut node = *container_node;
-    let mut node_kind = node.kind_id().into();
+    let mut node_kind = Java::from(node.kind_id());
 
     // Initializes the flag to true if the container is known to contain a boolean value
-    let mut has_boolean_content = match node.parent().unwrap().kind_id().into() {
-        BinaryExpression | IfStatement | WhileStatement | DoStatement | ForStatement => true,
-        TernaryExpression => node
-            .previous_sibling()
-            .is_none_or(|prev_node| !matches!(prev_node.kind_id().into(), QMARK | COLON)),
+    let mut has_boolean_content = match Java::from(node.parent().unwrap().kind_id()) {
+        Java::BinaryExpression
+        | Java::IfStatement
+        | Java::WhileStatement
+        | Java::DoStatement
+        | Java::ForStatement => true,
+        Java::TernaryExpression => node.previous_sibling().is_none_or(|prev_node| {
+            !matches!(Java::from(prev_node.kind_id()), Java::QMARK | Java::COLON)
+        }),
         _ => false,
     };
 
@@ -501,9 +531,9 @@ fn java_inspect_container(container_node: &Node, conditions: &mut f64) {
     loop {
         // Checks if the node is a parenthesized expression or a `Not` operator
         // The child node of index 0 contains the unary expression operator (we look for the `!` operator)
-        let is_parenthesised_exp = matches!(node_kind, ParenthesizedExpression);
-        let is_not_operator = matches!(node_kind, UnaryExpression)
-            && matches!(node.child(0).unwrap().kind_id().into(), BANG);
+        let is_parenthesised_exp = matches!(node_kind, Java::ParenthesizedExpression);
+        let is_not_operator = matches!(node_kind, Java::UnaryExpression)
+            && node.child(0).unwrap().kind_id() == Java::BANG as u16;
 
         // Stops the exploration if the node is neither
         // a parenthesized expression nor a `Not` operator
@@ -523,10 +553,13 @@ fn java_inspect_container(container_node: &Node, conditions: &mut f64) {
         // https://github.com/tree-sitter/tree-sitter-java/blob/master/src/grammar.json#L2472
         // https://github.com/tree-sitter/tree-sitter-java/blob/master/src/grammar.json#L2150
         node = node.child(1).unwrap();
-        node_kind = node.kind_id().into();
+        node_kind = Java::from(node.kind_id());
 
         // Stops the exploration when the content is found
-        if matches!(node_kind, MethodInvocation | Identifier | True | False) {
+        if matches!(
+            node_kind,
+            Java::MethodInvocation | Java::Identifier | Java::True | Java::False
+        ) {
             if has_boolean_content {
                 *conditions += 1.;
             }
@@ -537,9 +570,7 @@ fn java_inspect_container(container_node: &Node, conditions: &mut f64) {
 
 // Inspects a list of elements and counts any unary conditional expression found
 fn java_count_unary_conditions(list_node: &Node, conditions: &mut f64) {
-    use Java::*;
-
-    let list_kind = list_node.kind_id().into();
+    let list_kind = Java::from(list_node.kind_id());
     let mut cursor = list_node.cursor();
 
     // Scans the immediate children nodes of the argument node
@@ -547,12 +578,14 @@ fn java_count_unary_conditions(list_node: &Node, conditions: &mut f64) {
         loop {
             // Gets the current child node and its kind
             let node = cursor.node();
-            let node_kind = node.kind_id().into();
+            let node_kind = Java::from(node.kind_id());
 
             // Checks if the node is a unary condition
-            if matches!(node_kind, MethodInvocation | Identifier | True | False)
-                && matches!(list_kind, BinaryExpression)
-                && !matches!(list_kind, ArgumentList)
+            if matches!(
+                node_kind,
+                Java::MethodInvocation | Java::Identifier | Java::True | Java::False
+            ) && matches!(list_kind, Java::BinaryExpression)
+                && !matches!(list_kind, Java::ArgumentList)
             {
                 *conditions += 1.;
             } else {
@@ -566,6 +599,17 @@ fn java_count_unary_conditions(list_node: &Node, conditions: &mut f64) {
                 break;
             }
         }
+    }
+}
+
+impl Abc for CppCode {
+    fn compute(node: &Node, stats: &mut Stats) {
+        cpp::compute(*node, stats);
+    }
+
+    fn compute_source(node: &Node, code: &[u8], stats: &mut Stats) {
+        Self::compute(node, stats);
+        cpp::compute_source(*node, code, stats);
     }
 }
 

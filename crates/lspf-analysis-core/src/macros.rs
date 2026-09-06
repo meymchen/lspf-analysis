@@ -83,8 +83,7 @@ macro_rules! mk_lang {
             /// }
             /// ```
             pub fn into_enum_iter() -> impl Iterator<Item=LANG> {
-                use LANG::*;
-                [$( $camel, )*].into_iter()
+                [$( LANG::$camel, )*].into_iter()
             }
 
             /// Returns the name of a language as a `&str`.

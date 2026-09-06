@@ -382,7 +382,25 @@ fn dump_wmc(
         false,
         stdout,
     )?;
-    dump_value("total", stats.total_wmc(), &prefix, true, stdout)
+    dump_value(
+        "total",
+        stats.total_wmc(),
+        &prefix,
+        stats.known_complexity().is_none(),
+        stdout,
+    )?;
+    if let (Some(known), Some(unresolved)) = (stats.known_complexity(), stats.unresolved_methods())
+    {
+        dump_value("known_complexity", known, &prefix, false, stdout)?;
+        dump_value(
+            "unresolved_methods",
+            unresolved as f64,
+            &prefix,
+            true,
+            stdout,
+        )?;
+    }
+    Ok(())
 }
 
 fn dump_npm(

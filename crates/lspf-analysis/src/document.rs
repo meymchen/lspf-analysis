@@ -17,6 +17,7 @@ use lspf_analysis_core::{LANG, get_from_ext, get_function_spaces};
 /// know, which is the common case for clients that report `plaintext`.
 pub fn language_for(language_id: &str, path: &Path) -> Option<LANG> {
     let from_id = match language_id {
+        "cpp" => Some(LANG::Cpp),
         "rust" => Some(LANG::Rust),
         "python" => Some(LANG::Python),
         "java" => Some(LANG::Java),
@@ -43,8 +44,13 @@ pub fn analyze(
     path: &Path,
     config: &HealthConfig,
 ) -> Option<FileHealth> {
+    let started = std::time::Instant::now();
+    tracing::debug!(?language, path = %path.display(), bytes = text.len(), "analyzing document");
     let space = get_function_spaces(&language, text.into_bytes(), path)?;
-    Some(file_health(&space, path, config))
+    let report = file_health(&space, path, config);
+    tracing::debug!(path = %path.display(), functions = report.functions.len(), quality = report.quality,
+        elapsed_ms = started.elapsed().as_millis(), "document analysis complete");
+    Some(report)
 }
 
 /// Recovers a filesystem-like path from a document URI.
@@ -226,6 +232,29 @@ fn is_name_char(c: char) -> bool {
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn cpp_language_and_health_pipeline() {
+        assert_eq!(language_for("cpp", Path::new("untitled")), Some(LANG::Cpp));
+        for extension in [
+            "cpp", "cc", "cxx", "hpp", "hxx", "hh", "h", "ipp", "tpp", "inl", "cppm", "ccm", "cxxm",
+        ] {
+            assert_eq!(
+                language_for("plaintext", Path::new(&format!("sample.{extension}"))),
+                Some(LANG::Cpp)
+            );
+        }
+        let report = analyze(
+            LANG::Cpp,
+            "int add(int a, int b) { return a + b; }".into(),
+            Path::new("sample.cpp"),
+            &HealthConfig::default(),
+        )
+        .unwrap();
+        assert_eq!(report.functions.len(), 1);
+        assert_eq!(report.functions[0].display_name(), "add");
+        assert!(report.quality.is_finite());
+    }
 
     #[test]
     fn the_language_id_decides_when_it_is_known() {

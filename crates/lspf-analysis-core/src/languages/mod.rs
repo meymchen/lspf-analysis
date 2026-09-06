@@ -17,3 +17,6 @@ pub use language_tsx::*;
 
 pub mod language_typescript;
 pub use language_typescript::*;
+
+pub mod language_cpp;
+pub use language_cpp::*;

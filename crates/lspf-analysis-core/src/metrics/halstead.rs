@@ -315,6 +315,12 @@ impl Halstead for RustCode {
     }
 }
 
+impl Halstead for CppCode {
+    fn compute<'a>(node: &Node<'a>, code: &'a [u8], halstead_maps: &mut HalsteadMaps<'a>) {
+        compute_halstead::<Self>(node, code, halstead_maps);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::tools::check_metrics;

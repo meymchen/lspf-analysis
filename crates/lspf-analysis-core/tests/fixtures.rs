@@ -14,7 +14,8 @@ const FIXTURES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures");
 
 /// Every fixture, one per supported grammar plus the deliberately tangled
 /// `nested.rs`.
-const NAMES: [&str; 7] = [
+const NAMES: [&str; 8] = [
+    "simple.cpp",
     "simple.rs",
     "nested.rs",
     "simple.py",
@@ -68,6 +69,11 @@ fn assert_fixture(name: &str) {
 }
 
 #[test]
+fn cpp_simple() {
+    assert_fixture("simple.cpp");
+}
+
+#[test]
 fn rust_simple() {
     assert_fixture("simple.rs");
 }
@@ -104,22 +110,20 @@ fn java_simple() {
 
 #[test]
 fn every_supported_language_is_covered() {
-    let mut languages: Vec<&'static str> = NAMES
+    let languages: Vec<_> = NAMES
         .iter()
         .map(|name| {
             let path = PathBuf::from(FIXTURES).join(name);
             let source = read_file_with_eol(&path).unwrap().unwrap();
-            guess_language(&source, &path).0.unwrap().get_name()
+            guess_language(&source, &path).0.unwrap()
         })
         .collect();
-    languages.sort_unstable();
-    languages.dedup();
-    // Tsx and Typescript share a display name, so five distinct names cover
-    // all six parsers.
-    assert_eq!(
-        languages,
-        ["java", "javascript", "python", "rust", "typescript"]
-    );
+    for language in lspf_analysis_core::LANG::into_enum_iter() {
+        assert!(
+            languages.contains(&language),
+            "missing fixture for {language:?}"
+        );
+    }
 }
 
 #[test]
@@ -139,9 +143,9 @@ fn a_repository_report_spans_every_fixture() {
     let files: Vec<FileHealth> = NAMES.iter().map(|name| analyze(name).health).collect();
 
     let repo = RepoHealth::of(files.iter(), &HealthConfig::default());
-    assert_eq!(repo.files, 7);
+    assert_eq!(repo.files, 8);
     assert_eq!(
-        repo.functions, 14,
+        repo.functions, 16,
         "two functions per fixture, one in nested.rs, plus the Java interface's method"
     );
     assert_eq!(

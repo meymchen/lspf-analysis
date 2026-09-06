@@ -203,6 +203,7 @@ fn initial_settings() -> Settings {
 }
 
 async fn run_serve(choice: Choice) -> lspf::Result<lspf::Outcome> {
+    tracing::debug!(transport = ?choice, "starting language server");
     let build = || server(lspf::OsFileProvider::new(), initial_settings());
     match choice {
         Choice::Stdio => lspf::stdio(build()).serve().await,
@@ -223,9 +224,24 @@ async fn run_serve(choice: Choice) -> lspf::Result<lspf::Outcome> {
 
 #[tokio::main]
 async fn main() {
-    // Logs go to stderr: stdout carries the LSP wire protocol and nothing else.
+    // Logs default to stderr: stdout carries the LSP wire protocol.
+    // CodeLLDB on Windows may leave the debuggee's stderr attached to the
+    // adapter. An explicit log file lets the debug configuration relay it.
+    let writer = match std::env::var_os("LSPF_ANALYSIS_LOG_FILE") {
+        Some(path) => match std::fs::File::create(&path) {
+            Ok(file) => tracing_subscriber::fmt::writer::BoxMakeWriter::new(Mutex::new(file)),
+            Err(error) => {
+                eprintln!(
+                    "lspf-analysis: cannot open log file {}: {error}",
+                    PathBuf::from(path).display()
+                );
+                process::exit(1);
+            }
+        },
+        None => tracing_subscriber::fmt::writer::BoxMakeWriter::new(std::io::stderr),
+    };
     tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
+        .with_writer(writer)
         .with_ansi(false)
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
@@ -234,6 +250,7 @@ async fn main() {
         Command::Serve(serve) => match run_serve(serve.transport.choice()).await {
             Ok(outcome) => process::exit(outcome.code()),
             Err(error) => {
+                tracing::error!(%error, "language server failed");
                 eprintln!("lspf-analysis: {error}");
                 process::exit(1);
             }

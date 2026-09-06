@@ -15,6 +15,7 @@ use crate::*;
 /// <https://www.researchgate.net/publication/3187649_Kemerer_CF_A_metric_suite_for_object_oriented_design_IEEE_Trans_Softw_Eng_206_476-493>
 #[derive(Debug, Clone, Default)]
 pub struct Stats {
+    coverage: Option<SourceCoverage>,
     cyclomatic: f64,
     class_wmc: f64,
     interface_wmc: f64,
@@ -23,15 +24,27 @@ pub struct Stats {
     space_kind: SpaceKind,
 }
 
+/// Coverage of methods whose definitions are visible in the source file.
+#[derive(Debug, Clone, Default)]
+struct SourceCoverage {
+    known_complexity: f64,
+    unresolved_methods: usize,
+}
+
 impl Serialize for Stats {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        let mut st = serializer.serialize_struct("wmc", 3)?;
+        let mut st =
+            serializer.serialize_struct("wmc", if self.coverage.is_some() { 5 } else { 3 })?;
         st.serialize_field("classes", &self.class_wmc_sum())?;
         st.serialize_field("interfaces", &self.interface_wmc_sum())?;
         st.serialize_field("total", &self.total_wmc())?;
+        if let Some(coverage) = &self.coverage {
+            st.serialize_field("known_complexity", &coverage.known_complexity)?;
+            st.serialize_field("unresolved_methods", &coverage.unresolved_methods)?;
+        }
         st.end()
     }
 }
@@ -44,11 +57,53 @@ impl fmt::Display for Stats {
             self.class_wmc_sum(),
             self.interface_wmc_sum(),
             self.total_wmc()
-        )
+        )?;
+        if let Some(coverage) = &self.coverage {
+            write!(
+                f,
+                ", known_complexity: {}, unresolved_methods: {}",
+                coverage.known_complexity, coverage.unresolved_methods
+            )?;
+        }
+        Ok(())
     }
 }
 
 impl Stats {
+    pub(crate) fn cpp(space_kind: SpaceKind, known: f64, unresolved: usize) -> Self {
+        let value = if unresolved == 0 { known } else { f64::NAN };
+        Self {
+            space_kind,
+            class_wmc: value,
+            class_wmc_sum: value,
+            coverage: Some(SourceCoverage {
+                known_complexity: known,
+                unresolved_methods: unresolved,
+            }),
+            ..Self::default()
+        }
+    }
+
+    /// Complexity accounted for by visible C++ method definitions, even when
+    /// the complete WMC is unavailable. `None` means coverage is not tracked.
+    pub fn known_complexity(&self) -> Option<f64> {
+        self.coverage
+            .as_ref()
+            .map(|coverage| coverage.known_complexity)
+    }
+
+    /// Number of C++ methods without an unambiguous definition in this file.
+    pub fn unresolved_methods(&self) -> Option<usize> {
+        self.coverage
+            .as_ref()
+            .map(|coverage| coverage.unresolved_methods)
+    }
+
+    // C++ source inventories do not inherit Java's class-design thresholds.
+    pub(crate) fn supports_class_scoring(&self) -> bool {
+        self.coverage.is_none() && !self.is_disabled()
+    }
+
     /// Merges a second `Wmc` metric into the first one
     pub fn merge(&mut self, other: &Stats) {
         use SpaceKind::*;
@@ -63,6 +118,10 @@ impl Stats {
             }
         }
 
+        if let (Some(coverage), Some(other)) = (&mut self.coverage, &other.coverage) {
+            coverage.known_complexity += other.known_complexity;
+            coverage.unresolved_methods += other.unresolved_methods;
+        }
         self.class_wmc_sum += other.class_wmc_sum;
         self.interface_wmc_sum += other.interface_wmc_sum;
     }
@@ -141,6 +200,8 @@ implement_metric_trait!(
     JavascriptCode,
     TypescriptCode,
     TsxCode,
+    // C++ needs file-wide declaration/definition matching in cpp::classes.
+    CppCode,
     RustCode
 );
 

@@ -198,7 +198,7 @@ where
     Self: Checker,
     Self: std::marker::Sized,
 {
-    fn compute(node: &Node, stats: &mut Stats) {
+    fn compute(node: &Node, stats: &mut Stats, _code: &[u8]) {
         if Self::is_func(node) {
             compute_args::<Self>(node, &mut stats.fn_nargs);
             return;
@@ -219,6 +219,42 @@ implement_metric_trait!(
     TsxCode,
     RustCode
 );
+
+impl NArgs for CppCode {
+    fn compute(node: &Node, stats: &mut Stats, _code: &[u8]) {
+        if !Self::is_func(node) && !Self::is_closure(node) {
+            return;
+        }
+        let Some(parameters) = crate::cpp::function_declarator(*node)
+            .and_then(|d| d.child_by_field_name("parameters"))
+        else {
+            return;
+        };
+        let count = parameters
+            .children()
+            .filter(|n| {
+                matches!(
+                    Cpp::from(n.kind_id()),
+                    Cpp::ParameterDeclaration
+                        | Cpp::OptionalParameterDeclaration
+                        | Cpp::VariadicParameterDeclaration
+                        | Cpp::DOTDOTDOT
+                )
+            })
+            .filter(|n| {
+                !(n.kind_id() == Cpp::ParameterDeclaration as u16
+                    && n.child_by_field_name("declarator").is_none()
+                    && n.child_by_field_name("type")
+                        .is_some_and(|t| &_code[t.start_byte()..t.end_byte()] == b"void"))
+            })
+            .count();
+        if Self::is_func(node) {
+            stats.fn_nargs += count;
+        } else {
+            stats.closure_nargs += count;
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

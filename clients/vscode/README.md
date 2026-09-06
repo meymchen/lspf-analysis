@@ -6,7 +6,7 @@ This extension bundles the [lspf-analysis](https://github.com/meymchen/lspf-anal
 language server, so nothing else has to be installed — no Rust toolchain, no
 generic LSP client.
 
-Supported languages: **JavaScript**, **Python**, **Rust**, **TypeScript**, **TSX**.
+Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**, **TypeScript**, **TSX**.
 
 Everything it displays follows VS Code's own display language: Simplified
 Chinese when the editor is in Simplified Chinese, English otherwise. That

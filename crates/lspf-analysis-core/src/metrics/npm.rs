@@ -62,6 +62,17 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
+    pub(crate) fn cpp(public: usize, total: usize) -> Self {
+        Self {
+            class_npm: public,
+            class_nm: total,
+            class_npm_sum: public,
+            class_nm_sum: total,
+            is_class_space: true,
+            ..Self::default()
+        }
+    }
+
     /// Merges a second `Npm` metric into the first one
     pub fn merge(&mut self, other: &Stats) {
         self.class_npm_sum += other.class_npm_sum;
@@ -204,15 +215,13 @@ where
 
 impl Npm for JavaCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        use Java::*;
-
         // Enables the `Npm` metric if computing stats of a class space
         if Self::is_func_space(node) && stats.is_disabled() {
             stats.is_class_space = true;
         }
 
-        match node.kind_id().into() {
-            ClassBody => {
+        match Java::from(node.kind_id()) {
+            Java::ClassBody => {
                 stats.class_nm += node
                     .children()
                     .filter(|node| Self::is_func(node))
@@ -222,8 +231,10 @@ impl Npm for JavaCode {
                         // Source: https://docs.oracle.com/javase/tutorial/reflect/member/methodModifiers.html
                         if let Some(modifiers) = method.child(0) {
                             // Looks for the `public` keyword in the list of method modifiers
-                            if matches!(modifiers.kind_id().into(), Modifiers)
-                                && modifiers.first_child(|id| id == Public).is_some()
+                            if modifiers.kind_id() == Java::Modifiers as u16
+                                && modifiers
+                                    .first_child(|id| id == Java::Public as u16)
+                                    .is_some()
                             {
                                 stats.class_npm += 1;
                             }
@@ -233,7 +244,7 @@ impl Npm for JavaCode {
             }
             // All methods in an interface are implicitly public
             // Source: https://docs.oracle.com/javase/tutorial/java/IandI/interfaceDef.html
-            InterfaceBody => {
+            Java::InterfaceBody => {
                 // Children nodes are filtered because Java interfaces
                 // can contain methods but also constants and nested types
                 // Source: https://docs.oracle.com/javase/tutorial/java/IandI/createinterface.html
@@ -251,6 +262,8 @@ implement_metric_trait!(
     JavascriptCode,
     TypescriptCode,
     TsxCode,
+    // C++ inventories are finalized file-wide in cpp::classes.
+    CppCode,
     RustCode
 );
 

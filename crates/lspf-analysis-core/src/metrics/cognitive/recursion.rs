@@ -8,6 +8,9 @@ use petgraph::graph::{DiGraph, NodeIndex};
 
 use crate::{LANG, Node};
 
+mod node_kind;
+use node_kind::{Kind, kind};
+
 #[derive(Default)]
 struct Scope<'a> {
     parent: Option<usize>,
@@ -29,48 +32,59 @@ fn text<'a>(node: Node, code: &'a [u8]) -> &'a [u8] {
     &code[node.start_byte()..node.end_byte()]
 }
 
-fn is_function(kind: &str) -> bool {
+fn is_function(kind: Kind) -> bool {
     matches!(
         kind,
-        "function_item"
-            | "function_definition"
-            | "function_declaration"
-            | "generator_function_declaration"
-            | "function_expression"
-            | "generator_function"
-            | "method_declaration"
-            | "method_definition"
-            | "constructor_declaration"
-            | "arrow_function"
-            | "closure_expression"
-            | "lambda"
-            | "lambda_expression"
+        Kind::FunctionItem
+            | Kind::FunctionDefinition
+            | Kind::FunctionDeclaration
+            | Kind::GeneratorFunctionDeclaration
+            | Kind::FunctionExpression
+            | Kind::GeneratorFunction
+            | Kind::MethodDeclaration
+            | Kind::MethodDefinition
+            | Kind::ConstructorDeclaration
+            | Kind::ArrowFunction
+            | Kind::ClosureExpression
+            | Kind::Lambda
+            | Kind::LambdaExpression
     )
 }
 
-fn is_class(kind: &str) -> bool {
+fn is_class(kind: Kind) -> bool {
     matches!(
         kind,
-        "class_body" | "class_definition" | "impl_item" | "trait_item"
+        Kind::ClassBody
+            | Kind::ClassDefinition
+            | Kind::ImplItem
+            | Kind::TraitItem
+            | Kind::ClassSpecifier
+            | Kind::StructSpecifier
+            | Kind::UnionSpecifier
     )
 }
 
-fn is_scope(kind: &str, language: LANG) -> bool {
+fn is_scope(kind: Kind, language: LANG) -> bool {
     is_function(kind)
         || is_class(kind)
-        || matches!(kind, "declaration_list" | "mod_item")
+        || matches!(
+            kind,
+            Kind::DeclarationList | Kind::ModItem | Kind::NamespaceDefinition
+        )
         || (!matches!(language, LANG::Python)
             && matches!(
                 kind,
-                "block"
-                    | "statement_block"
-                    | "for_statement"
-                    | "for_in_statement"
-                    | "for_expression"
-                    | "catch_clause"
-                    | "match_arm"
-                    | "if_expression"
-                    | "while_expression"
+                Kind::Block
+                    | Kind::CompoundStatement
+                    | Kind::ForRangeLoop
+                    | Kind::StatementBlock
+                    | Kind::ForStatement
+                    | Kind::ForInStatement
+                    | Kind::ForExpression
+                    | Kind::CatchClause
+                    | Kind::MatchArm
+                    | Kind::IfExpression
+                    | Kind::WhileExpression
             ))
 }
 
@@ -80,80 +94,100 @@ fn callable(node: Node, language: LANG) -> bool {
     }
     match language {
         LANG::Java => {
-            node.kind() == "method_declaration"
+            kind(node, language) == Kind::MethodDeclaration
                 && node.children().any(|child| {
-                    child.kind() == "modifiers"
+                    kind(child, language) == Kind::Modifiers
                         && child.children().any(|modifier| {
-                            matches!(modifier.kind(), "static" | "private" | "final")
+                            matches!(
+                                kind(modifier, language),
+                                Kind::Static | Kind::Private | Kind::Final
+                            )
                         })
                 })
         }
         LANG::Python => {
-            node.kind() == "function_definition"
+            kind(node, language) == Kind::FunctionDefinition
                 && !node
                     .parent()
-                    .is_some_and(|parent| parent.kind() == "decorated_definition")
+                    .is_some_and(|parent| kind(parent, language) == Kind::DecoratedDefinition)
         }
-        LANG::Rust => node.kind() == "function_item",
+        LANG::Rust => kind(node, language) == Kind::FunctionItem,
+        LANG::Cpp => {
+            kind(node, language) == Kind::FunctionDefinition
+                && crate::cpp::function_name(node)
+                    .is_some_and(|n| kind(n, language) == Kind::Identifier)
+        }
         _ => matches!(
-            node.kind(),
-            "function_declaration"
-                | "generator_function_declaration"
-                | "function_expression"
-                | "generator_function"
+            kind(node, language),
+            Kind::FunctionDeclaration
+                | Kind::GeneratorFunctionDeclaration
+                | Kind::FunctionExpression
+                | Kind::GeneratorFunction
         ),
     }
 }
 
 // Only binding patterns are visited, never their type annotations or default values.
-fn bind_pattern<'a>(root: Node, code: &'a [u8], scope: &mut Scope<'a>) {
+fn bind_pattern<'a>(root: Node, code: &'a [u8], scope: &mut Scope<'a>, language: LANG) {
     let mut pending = vec![root];
     while let Some(node) = pending.pop() {
+        let node_kind = kind(node, language);
         if matches!(
-            node.kind(),
-            "identifier" | "shorthand_property_identifier_pattern"
+            node_kind,
+            Kind::Identifier | Kind::ShorthandPropertyIdentifierPattern
         ) {
             scope.bind(text(node, code), None);
             continue;
         }
         if matches!(
-            node.kind(),
-            "attribute" | "member_expression" | "subscript" | "subscript_expression"
+            node_kind,
+            Kind::Attribute | Kind::MemberExpression | Kind::Subscript | Kind::SubscriptExpression
         ) {
             continue;
         }
         let bound = node
-            .child_by_field_name("pattern")
+            .child_by_field_name("declarator")
+            .or_else(|| node.child_by_field_name("pattern"))
             .or_else(|| node.child_by_field_name("name"))
             .or_else(|| node.child_by_field_name("left"));
         if let Some(bound) = bound {
             pending.push(bound);
-        } else if node.kind() == "pair_pattern" {
+        } else if node_kind == Kind::PairPattern {
             pending.extend(node.child_by_field_name("value"));
         } else {
             pending.extend(node.children().filter(|child| {
-                child.is_named() && !matches!(child.kind(), "type_annotation" | "type_identifier")
+                child.is_named()
+                    && !matches!(
+                        kind(*child, language),
+                        Kind::TypeAnnotation | Kind::TypeIdentifier
+                    )
             }));
         }
     }
 }
 
-fn binding_field(kind: &str) -> Option<&'static str> {
+fn binding_field(kind: Kind) -> Option<&'static str> {
     match kind {
-        "let_declaration" | "let_condition" | "for_expression" | "match_arm" => Some("pattern"),
-        "variable_declarator"
-        | "enhanced_for_statement"
-        | "const_item"
-        | "static_item"
-        | "struct_item"
-        | "enum_item" => Some("name"),
-        "assignment"
-        | "augmented_assignment"
-        | "assignment_expression"
-        | "augmented_assignment_expression"
-        | "for_in_statement" => Some("left"),
-        "for_statement" => Some("left"),
-        "catch_clause" => Some("parameter"),
+        Kind::Declaration
+        | Kind::InitDeclarator
+        | Kind::ParameterDeclaration
+        | Kind::OptionalParameterDeclaration => Some("declarator"),
+        Kind::LetDeclaration | Kind::LetCondition | Kind::ForExpression | Kind::MatchArm => {
+            Some("pattern")
+        }
+        Kind::VariableDeclarator
+        | Kind::EnhancedForStatement
+        | Kind::ConstItem
+        | Kind::StaticItem
+        | Kind::StructItem
+        | Kind::EnumItem => Some("name"),
+        Kind::Assignment
+        | Kind::AugmentedAssignment
+        | Kind::AssignmentExpression
+        | Kind::AugmentedAssignmentExpression
+        | Kind::ForInStatement => Some("left"),
+        Kind::ForStatement => Some("left"),
+        Kind::CatchClause => Some("parameter"),
         _ => None,
     }
 }
@@ -182,10 +216,19 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
     let mut calls = Vec::new();
     let mut pending = vec![(root, 0, None)];
     while let Some((node, mut scope, mut owner)) = pending.pop() {
-        if matches!(node.kind(), "macro_definition" | "macro_invocation") {
+        let node_kind = kind(node, language);
+        if matches!(node_kind, Kind::MacroDefinition | Kind::MacroInvocation) {
             continue;
         }
-        let function = is_function(node.kind());
+        if matches!(language, LANG::Cpp)
+            && matches!(node_kind, Kind::PreprocDef | Kind::PreprocFunctionDef)
+        {
+            if let Some(name) = node.child_by_field_name("name") {
+                scopes[scope].bind(text(name, code), None);
+            }
+            continue;
+        }
+        let function = is_function(node_kind);
         let target = if function && callable(node, language) {
             Some(graph.add_node(node.id()))
         } else {
@@ -199,33 +242,43 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
                 .filter(|parameters| {
                     !parameters
                         .children()
-                        .any(|parameter| parameter.kind() == "spread_parameter")
+                        .any(|parameter| kind(parameter, language) == Kind::SpreadParameter)
                 })
                 .map(|parameters| {
                     parameters
                         .children()
                         .filter(|parameter| {
                             parameter.is_named()
-                                && !matches!(parameter.kind(), "line_comment" | "block_comment")
+                                && !matches!(
+                                    kind(*parameter, language),
+                                    Kind::LineComment | Kind::BlockComment
+                                )
                         })
                         .count()
                 });
             java_arities.insert(target, arity);
         }
-        let private_name = matches!(node.kind(), "function_expression" | "generator_function");
-        if (function || node.kind() == "class_definition" || node.kind() == "class_declaration")
+        let private_name = matches!(
+            node_kind,
+            Kind::FunctionExpression | Kind::GeneratorFunction
+        );
+        if (function || node_kind == Kind::ClassDefinition || node_kind == Kind::ClassDeclaration)
             && !private_name
-            && let Some(name) = node.child_by_field_name("name")
+            && let Some(name) = node.child_by_field_name("name").or_else(|| {
+                matches!(language, LANG::Cpp)
+                    .then(|| crate::cpp::function_name(node))
+                    .flatten()
+            })
         {
             scopes[scope].bind(text(name, code), target);
         }
-        if is_scope(node.kind(), language) {
+        if is_scope(node_kind, language) {
             let next = scopes.len();
-            let class = is_class(node.kind())
-                || (node.kind() == "declaration_list"
-                    && node
-                        .parent()
-                        .is_some_and(|parent| matches!(parent.kind(), "impl_item" | "trait_item")));
+            let class = is_class(node_kind)
+                || (node_kind == Kind::DeclarationList
+                    && node.parent().is_some_and(|parent| {
+                        matches!(kind(parent, language), Kind::ImplItem | Kind::TraitItem)
+                    }));
             scopes.push(Scope {
                 parent: Some(scope),
                 class,
@@ -238,30 +291,37 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
             if private_name && let Some(name) = node.child_by_field_name("name") {
                 scopes[scope].bind(text(name, code), target);
             }
-            if let Some(parameters) = node.child_by_field_name("parameters") {
-                bind_pattern(parameters, code, &mut scopes[scope]);
+            if let Some(parameters) = node.child_by_field_name("parameters").or_else(|| {
+                matches!(language, LANG::Cpp)
+                    .then(|| {
+                        crate::cpp::function_declarator(node)
+                            .and_then(|d| d.child_by_field_name("parameters"))
+                    })
+                    .flatten()
+            }) {
+                bind_pattern(parameters, code, &mut scopes[scope], language);
             }
             if let Some(parameter) = node.child_by_field_name("parameter") {
-                bind_pattern(parameter, code, &mut scopes[scope]);
+                bind_pattern(parameter, code, &mut scopes[scope], language);
             }
         }
-        if let Some(field) = binding_field(node.kind())
+        if let Some(field) = binding_field(node_kind)
             && let Some(pattern) = node.child_by_field_name(field)
         {
             // JS var declarations and assignments may affect enclosing bindings.
             // Blocking the name in every ancestor avoids inventing a recursive edge.
             let broad = matches!(
-                node.kind(),
-                "assignment"
-                    | "augmented_assignment"
-                    | "assignment_expression"
-                    | "augmented_assignment_expression"
+                node_kind,
+                Kind::Assignment
+                    | Kind::AugmentedAssignment
+                    | Kind::AssignmentExpression
+                    | Kind::AugmentedAssignmentExpression
             ) || node
                 .parent()
-                .is_some_and(|p| p.kind() == "variable_declaration");
+                .is_some_and(|p| kind(p, language) == Kind::VariableDeclaration);
             let mut destination = scope;
             loop {
-                bind_pattern(pattern, code, &mut scopes[destination]);
+                bind_pattern(pattern, code, &mut scopes[destination], language);
                 if !broad {
                     break;
                 }
@@ -272,8 +332,11 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
             }
         }
         if matches!(
-            node.kind(),
-            "import_statement" | "import_from_statement" | "use_declaration"
+            node_kind,
+            Kind::ImportStatement
+                | Kind::ImportFromStatement
+                | Kind::UseDeclaration
+                | Kind::UsingDeclaration
         ) {
             let import = text(node, code);
             if import.contains(&b'*') {
@@ -281,35 +344,35 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
             } else {
                 // Binding every identifier is conservative for aliases, but still
                 // permits calls unrelated to the imported names.
-                bind_pattern(node, code, &mut scopes[scope]);
+                bind_pattern(node, code, &mut scopes[scope], language);
             }
         }
         if matches!(
-            node.kind(),
-            "global_statement"
-                | "nonlocal_statement"
-                | "with_statement"
-                | "except_clause"
-                | "list_comprehension"
-                | "dictionary_comprehension"
-                | "set_comprehension"
-                | "generator_expression"
-                | "match_statement"
-                | "delete_statement"
+            node_kind,
+            Kind::GlobalStatement
+                | Kind::NonlocalStatement
+                | Kind::WithStatement
+                | Kind::ExceptClause
+                | Kind::ListComprehension
+                | Kind::DictionaryComprehension
+                | Kind::SetComprehension
+                | Kind::GeneratorExpression
+                | Kind::MatchStatement
+                | Kind::DeleteStatement
         ) {
             // Wildcard imports and these binding forms need language-specific resolution.
             scopes[scope].opaque = true;
         }
         if let Some(owner) = owner {
-            let callee = match node.kind() {
-                "call" | "call_expression" => node.child_by_field_name("function"),
-                "method_invocation" if node.child_by_field_name("object").is_none() => {
+            let callee = match node_kind {
+                Kind::Call | Kind::CallExpression => node.child_by_field_name("function"),
+                Kind::MethodInvocation if node.child_by_field_name("object").is_none() => {
                     node.child_by_field_name("name")
                 }
                 _ => None,
             };
             if let Some(callee) = callee
-                && callee.kind() == "identifier"
+                && kind(callee, language) == Kind::Identifier
             {
                 let name = text(callee, code);
                 if name == b"eval"
@@ -322,7 +385,10 @@ pub(super) fn functions(root: Node, code: &[u8], language: LANG) -> HashSet<usiz
                         .children()
                         .filter(|argument| {
                             argument.is_named()
-                                && !matches!(argument.kind(), "line_comment" | "block_comment")
+                                && !matches!(
+                                    kind(*argument, language),
+                                    Kind::LineComment | Kind::BlockComment
+                                )
                         })
                         .count()
                 });

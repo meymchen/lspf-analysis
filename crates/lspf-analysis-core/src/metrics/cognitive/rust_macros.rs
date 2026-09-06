@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::node::Tree;
-use crate::{Node, RustCode};
+use crate::{Node, Rust, RustCode};
 
 use super::{Cognitive, Stats};
 
@@ -22,7 +22,7 @@ impl Macros {
         let mut result = Self::default();
         let mut pending = vec![root];
         while let Some(node) = pending.pop() {
-            if node.kind() == "macro_definition" {
+            if node.kind_id() == Rust::MacroDefinition as u16 {
                 if let Some(name) = node.child_by_field_name("name") {
                     result.shadowed.insert(
                         String::from_utf8_lossy(&code[name.start_byte()..name.end_byte()])
@@ -31,7 +31,7 @@ impl Macros {
                 }
                 continue;
             }
-            if node.kind() == "use_declaration" {
+            if node.kind_id() == Rust::UseDeclaration as u16 {
                 let import = String::from_utf8_lossy(&code[node.start_byte()..node.end_byte()]);
                 result.wildcard_import |= import.contains('*');
                 for word in import.split(|c: char| !c.is_alphanumeric() && c != '_') {
@@ -40,9 +40,11 @@ impl Macros {
                     }
                 }
             }
-            if matches!(node.kind(), "attribute_item" | "inner_attribute_item")
-                && String::from_utf8_lossy(&code[node.start_byte()..node.end_byte()])
-                    .contains("macro_use")
+            if matches!(
+                Rust::from(node.kind_id()),
+                Rust::AttributeItem | Rust::InnerAttributeItem
+            ) && String::from_utf8_lossy(&code[node.start_byte()..node.end_byte()])
+                .contains("macro_use")
             {
                 result.wildcard_import = true;
             }
@@ -82,7 +84,12 @@ impl Macros {
         if !SUPPORTED.contains(&name) || self.shadowed.contains(name) || self.wildcard_import {
             return;
         }
-        let Some(tokens) = node.children().find(|child| child.kind() == "token_tree") else {
+        let Some(tokens) = node.children().find(|child| {
+            matches!(
+                Rust::from(child.kind_id()),
+                Rust::TokenTree | Rust::TokenTree2
+            )
+        }) else {
             return;
         };
         if tokens.end_byte() <= tokens.start_byte() + 1 {
@@ -105,7 +112,7 @@ impl Macros {
         }
         let Some(function) = root
             .children()
-            .find(|child| child.kind() == "function_item")
+            .find(|child| child.kind_id() == Rust::FunctionItem as u16)
         else {
             return;
         };
@@ -114,7 +121,7 @@ impl Macros {
         };
         let Some(statement) = body
             .children()
-            .find(|child| child.kind() == "expression_statement")
+            .find(|child| child.kind_id() == Rust::ExpressionStatement as u16)
         else {
             return;
         };
@@ -132,7 +139,11 @@ impl Macros {
         let expressions: Vec<_> = arguments
             .children()
             .filter(|child| {
-                child.is_named() && !matches!(child.kind(), "line_comment" | "block_comment")
+                child.is_named()
+                    && !matches!(
+                        Rust::from(child.kind_id()),
+                        Rust::LineComment | Rust::BlockComment
+                    )
             })
             .collect();
         if name == "assert" && expressions.is_empty() {
@@ -149,11 +160,11 @@ impl Macros {
             let mut pending = vec![expression];
             while let Some(node) = pending.pop() {
                 // Function items belong to their own metric space, not the caller.
-                if node.kind() == "function_item" {
+                if node.kind_id() == Rust::FunctionItem as u16 {
                     continue;
                 }
                 RustCode::compute(&node, stats, &mut map);
-                if node.kind() == "macro_invocation" {
+                if node.kind_id() == Rust::MacroInvocation as u16 {
                     self.compute_at_depth(node, &source, stats, map[&node.id()], depth + 1);
                     continue;
                 }

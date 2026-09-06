@@ -62,6 +62,17 @@ impl fmt::Display for Stats {
 }
 
 impl Stats {
+    pub(crate) fn cpp(public: usize, total: usize) -> Self {
+        Self {
+            class_npa: public,
+            class_na: total,
+            class_npa_sum: public,
+            class_na_sum: total,
+            is_class_space: true,
+            ..Self::default()
+        }
+    }
+
     /// Merges a second `Npa` metric into the first one
     pub fn merge(&mut self, other: &Stats) {
         self.class_npa_sum += other.class_npa_sum;
@@ -204,30 +215,30 @@ where
 
 impl Npa for JavaCode {
     fn compute(node: &Node, stats: &mut Stats) {
-        use Java::*;
-
         // Enables the `Npa` metric if computing stats of a class space
         if Self::is_func_space(node) && stats.is_disabled() {
             stats.is_class_space = true;
         }
 
-        match node.kind_id().into() {
-            ClassBody => {
+        match Java::from(node.kind_id()) {
+            Java::ClassBody => {
                 stats.class_na += node
                     .children()
-                    .filter(|node| matches!(node.kind_id().into(), FieldDeclaration))
+                    .filter(|node| node.kind_id() == Java::FieldDeclaration as u16)
                     .map(|declaration| {
                         let attributes = declaration
                             .children()
-                            .filter(|n| matches!(n.kind_id().into(), VariableDeclarator))
+                            .filter(|n| n.kind_id() == Java::VariableDeclarator as u16)
                             .count();
                         // The first child node contains the list of attribute modifiers
                         // There are several modifiers that may be part of a field declaration
                         // Source: https://docs.oracle.com/javase/tutorial/reflect/member/fieldModifiers.html
                         if declaration.child(0).is_some_and(|modifiers| {
                             // Looks for the `public` keyword in the list of attribute modifiers
-                            matches!(modifiers.kind_id().into(), Modifiers)
-                                && modifiers.first_child(|id| id == Public).is_some()
+                            modifiers.kind_id() == Java::Modifiers as u16
+                                && modifiers
+                                    .first_child(|id| id == Java::Public as u16)
+                                    .is_some()
                         }) {
                             stats.class_npa += attributes;
                         }
@@ -237,15 +248,15 @@ impl Npa for JavaCode {
             }
             // Every field declaration in the body of an interface is implicitly public, static, and final
             // Source: https://docs.oracle.com/javase/specs/jls/se7/html/jls-9.html
-            InterfaceBody => {
+            Java::InterfaceBody => {
                 // Children nodes are filtered because Java interfaces
                 // can contain constants but also methods and nested types
                 // Source: https://docs.oracle.com/javase/tutorial/java/IandI/createinterface.html
                 stats.interface_na += node
                     .children()
-                    .filter(|node| matches!(node.kind_id().into(), ConstantDeclaration))
+                    .filter(|node| node.kind_id() == Java::ConstantDeclaration as u16)
                     .flat_map(|node| node.children())
-                    .filter(|node| matches!(node.kind_id().into(), VariableDeclarator))
+                    .filter(|node| node.kind_id() == Java::VariableDeclarator as u16)
                     .count();
                 stats.interface_npa = stats.interface_na;
             }
@@ -260,6 +271,8 @@ implement_metric_trait!(
     JavascriptCode,
     TypescriptCode,
     TsxCode,
+    // C++ inventories are finalized file-wide in cpp::classes.
+    CppCode,
     RustCode
 );
 

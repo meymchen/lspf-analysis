@@ -477,15 +477,13 @@ fn class_health(space: &FuncSpace, config: &HealthConfig) -> ClassHealth {
 
 /// Collects every scored class space below `space`, in source order.
 ///
-/// A class space only counts when its language really computed the
-/// class-level metrics. `Wmc::compute` is a no-op for every grammar but
-/// Java, and a no-op leaves the space kind at `Unknown`, which is exactly
-/// what `wmc::Stats::is_disabled` reports. So a Python or JavaScript class
-/// is skipped rather than scored a meaningless 100.
+/// Class scoring requires calibrated thresholds as well as computed metrics.
+/// Java currently supplies both. C++ exposes source inventories separately,
+/// without treating unresolved definitions or public data structs as Java classes.
 fn collect_classes(space: &FuncSpace, config: &HealthConfig, out: &mut Vec<ClassHealth>) {
     for child in &space.spaces {
         if matches!(child.kind, SpaceKind::Class | SpaceKind::Interface)
-            && !child.metrics.wmc.is_disabled()
+            && child.metrics.wmc.supports_class_scoring()
         {
             out.push(class_health(child, config));
         }

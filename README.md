@@ -8,7 +8,7 @@ It computes code metrics with a tree-sitter-based engine forked from
 them into a code health rating, and publishes the result as LSP diagnostics
 through [lspf](https://github.com/meymchen/lspf).
 
-Supported languages: **Java**, **JavaScript**, **Python**, **Rust**,
+Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**,
 **TypeScript**, **TSX**.
 
 ## What it reports
@@ -37,11 +37,10 @@ behind a good one, and no property is counted twice.
 | | Halstead difficulty | 12 | vocabulary size is what loads working memory, [Peitek et al. 2021][pe21] |
 | **Interface** | parameters | 4 | unit interfacing in the SIG model; the smell with the highest defect correlation in [Topuz 2022][to22] |
 
-A class is not a function, and none of those four is defined for one, so a
-class is scored on a pillar of its own. This only happens where the engine
-really computes the class-level metrics, which today means Java; a `class`
-space in a language whose `WMC`, `NPM` and `NPA` are no-ops would score a
-constant 100 and say nothing, so it is left out of the report entirely.
+Class design has a separate scoring pillar. Its current thresholds come from
+Java corpora, so only Java classes are scored. C++ class metrics are computed
+and reported, but do not affect health scores until suitable thresholds are
+established. Other languages without class metrics remain outside this pillar.
 
 | Pillar | Metric | Default threshold | Evidence |
 | --- | --- | ---: | --- |
@@ -97,12 +96,66 @@ Java calls additionally require a private, static, or final method with a
 matching fixed argument count. Ambiguous bindings and dynamic receivers are
 skipped.
 
+The C++ implementation references [rust-code-analysis at 37e5d83](https://github.com/mozilla/rust-code-analysis/tree/37e5d83c056c8cbf827223d5814a93c5218df1a9).
+C++ uses the unmodified `tree-sitter-cpp` 0.23.4 grammar. Functions,
+constructors, destructors, conversion operators, lambdas, classes, structs,
+unions, and namespaces have their own metric spaces. Standard `<cinttypes>`
+format fragments such as `"%" PRIi32` are normalized at equal byte width for
+parsing; reports retain the original source and positions.
+
+C++ macro replacement lists contribute their source-visible control flow and
+boolean sequences once, at the definition. Calls do not multiply that cost.
+This is source analysis: it does not load headers, choose preprocessor branches,
+or expand build-dependent macros. Recursion uses unique unqualified names in
+the current file; overloads, qualified calls, and indirect calls are skipped.
+The upstream C++ macro-complexity TODO is covered by replacement-list tests,
+and the ignored format-macro regression (Mozilla issue 1142) runs here.
+The upstream preprocessor warning/performance TODOs belong to Mozilla's
+preprocessing pipeline, which this project does not use.
+
 For Rust, unqualified `assert!`, `dbg!`, and `vec!` calls contribute the
 complexity of their visible argument expressions, including nested macros
 and the caller's nesting level. Macro expansion is not performed. Imported
 or locally redefined macro names are skipped conservatively. Qualified and
 cross-file calls, additional binding forms, and broader macro support are
 tracked in [issue #1](https://github.com/meymchen/lspf-analysis/issues/1).
+
+### C++ ABC and class metrics
+
+C++ ABC counts explicit initialization, assignment, and increment/decrement
+operations as A; call expressions, `new`, `delete`, and jumps into deeper
+blocks as B; and comparisons, unary boolean tests, conditional expressions,
+`else`, switch labels, and `catch` clauses as C. Grammar structure distinguishes
+template brackets and declarators from comparisons and calls. Macro replacement
+lists contribute once at their definition, without multiplying their bodies
+at call sites. Implicit constructors, destructors, and overloaded operator calls
+are not inferred from syntax.
+
+NPA counts public data members and NPM counts public methods declared by each
+class, struct, or union. Counts include static members, constructors,
+destructors, conversion operators, and method templates. Access starts private
+for `class` and public for `struct`/`union`, then follows access specifiers.
+Function pointers are data members; friends and inherited members are excluded.
+Anonymous union fields belong to their enclosing class. Nested classes keep
+their own inventories. Preprocessor branches are visited in source order;
+these counts describe the source file, not a selected build configuration.
+
+WMC sums method cyclomatic complexity, excluding nested lambdas and local
+classes. Declarations own the methods; an unambiguous matching class-external
+definition supplies complexity without increasing NPM. Matching uses namespaces,
+class names, parameter type tokens, and method cv/ref qualifiers, ignoring
+parameter names and defaults. Generic template owners are matched where their
+source signatures agree. Type aliases, semantic type equivalence, renamed
+template parameters, and cross-file definitions are not resolved. Ambiguous
+matches stay unresolved.
+
+A method with a missing or malformed body leaves WMC incomplete. JSON then
+reports `null` for the affected WMC sum, alongside `known_complexity` and
+`unresolved_methods`; YAML/text use their non-finite value representation.
+Explicitly defaulted, deleted, and pure declarations contribute zero executable
+source complexity. Their compiler-generated behavior is outside this metric.
+Both coverage fields also appear in the text metrics output. C++ ABC and class
+metrics currently do not change health scores.
 
 ### What is deliberately left out
 
@@ -122,10 +175,9 @@ about evidence, not an oversight.
 - **Number of methods** — a count without the complexity weighting that
   makes WMC say something about how much a class does. It is carried on the
   class report as the weight a file balances its classes by, not scored.
-- **ABC** — computed for Java and for no other grammar this fork carries.
-  Scoring it would add a second size measure that only one language has,
-  which would make a Java score mean something different from every other
-  language's. It is reported, and hidden where it is not computed.
+- **ABC** — computed for Java and C++. It is reported but not scored: adding
+  another size measure for only those languages would weaken comparability.
+  It is hidden where it is not computed.
 
 ### Defaults
 
@@ -462,20 +514,31 @@ npm --prefix clients/vscode ci
 npm --prefix clients/vscode test
 ```
 
-To run the extension against a debug build, open this repository in VS Code
-and launch "Run language extension" (F5); it resolves the server from
-`target/debug` rather than from a packaged binary.
+Select one of three VS Code debug entries and press F5:
 
-To debug both halves at once, launch "Debug extension and server" instead.
-It starts the server under [CodeLLDB](https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb)
-on `serve --tcp 127.0.0.1:9257` and then an Extension Development Host with
-`LSPF_ANALYSIS_DEBUG_TCP=9257`, which makes the extension connect to that
-process rather than spawn one of its own. Breakpoints in `src/` and in the
-Rust sources are both live, from `initialize` onward.
+- **stdio** starts the Extension Development Host, which launches the server
+  with `serve --stdio`, using the same transport as the distributed extension.
+  It uses the local debug build unless `lspfAnalysis.server.path` is configured.
+  Server logs appear in **Output → LSPF Analysis**.
+- **tcp** starts the server under CodeLLDB on `127.0.0.1:9257` and an extension
+  host that connects through TCP.
+- **websocket** starts the server under CodeLLDB on `127.0.0.1:9258` and an
+  extension host that connects through WebSocket.
 
-A `--tcp` server serves one client and exits, so reloading the development
-host leaves nothing to connect to; restart the compound rather than the
-window.
+Each entry builds the server and prepares the extension before launching.
+TCP and WebSocket run the server and host as separate debug sessions, with
+Rust and extension breakpoints available. The host retries while the server
+starts. Stopping either session stops both; restart the entry after closing
+or reloading the host. Server logs go to the integrated terminal. The stdio
+entry supports extension breakpoints.
+
+The menu shows only these three entries. The fixed server and host
+configurations used by the network entries are hidden. No protocol prompt,
+console listener, or Python helper is needed.
+
+Run `npm --prefix clients/vscode run test:debug-transport` to build the server
+and verify LSP initialization and shutdown over stdio, TCP, and WebSocket.
+Tests that require native POSIX or Windows path behavior skip on other systems.
 
 ### Updating grammars
 

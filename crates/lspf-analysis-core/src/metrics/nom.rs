@@ -208,6 +208,7 @@ implement_metric_trait!(
     JavascriptCode,
     TypescriptCode,
     TsxCode,
+    CppCode,
     RustCode
 );
 
