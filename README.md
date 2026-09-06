@@ -289,6 +289,25 @@ code --install-extension clients/vscode/lspf-analysis-<platform>-<version>.vsix
 `npm run package -- --target darwin-arm64` builds for another platform;
 [the extension's README](./clients/vscode/README.md) lists the supported ones.
 
+### IntelliJ IDEA
+
+[`clients/intellij`](./clients/intellij) is the plugin, built on the platform's
+own LSP client, and it carries the server binary the same way. It needs
+**2026.2 or later**: the LSP client API was open-sourced in 2026.1.4, and before
+that a plugin built on it was inert outside the commercial IDEs. Until it is
+published, build the ZIP and install it from disk:
+
+```console
+clients/intellij/gradlew -p clients/intellij buildPlugin
+```
+
+Then **Settings | Plugins | ⚙ | Install Plugin from Disk…** and pick
+`clients/intellij/build/distributions/lspf-analysis-intellij-win32-x64-<version>.zip`.
+
+Only Windows x64 ships with a binary today. Elsewhere the plugin works the same,
+but install the server separately and point **Language server path** at it;
+[the plugin's README](./clients/intellij/README.md) has the details.
+
 ### The binary on its own
 
 ```console
@@ -313,9 +332,9 @@ see the connection come up.
 
 ### Editor setup
 
-In VS Code the extension does this for you. Any other editor launches
-`lspf-analysis serve --stdio` the way it launches any language server, for
-the language ids `java`, `rust`, `python`, `javascript`, `javascriptreact`,
+In VS Code and in IntelliJ IDEA the client does this for you. Any other editor
+launches `lspf-analysis serve --stdio` the way it launches any language server,
+for the language ids `java`, `rust`, `python`, `javascript`, `javascriptreact`,
 `typescript` and `typescriptreact`.
 
 Open a source file with a long or deeply nested function; the signature line
@@ -556,6 +575,8 @@ before and after the bump.
   its `lspf-analysis` binary.
 - [`clients/vscode`](./clients/vscode) — the VS Code extension, which packages
   the binary for one platform per VSIX.
+- [`clients/intellij`](./clients/intellij) — the IntelliJ IDEA plugin, built on
+  the platform's own LSP client and packaged the same way.
 - [`enums`](./enums) — the generator for the tree-sitter node kind bindings.
 
 ## Credits
