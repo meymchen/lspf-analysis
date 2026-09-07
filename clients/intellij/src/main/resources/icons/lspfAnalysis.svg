@@ -1,0 +1,10 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Four bars of falling height: a file's functions, worst last. -->
+  <rect x="2" y="8" width="2.5" height="6" rx="0.5" fill="#59A869"/>
+  <rect x="5.8" y="6" width="2.5" height="8" rx="0.5" fill="#389FD6"/>
+  <rect x="9.6" y="9.5" width="2.5" height="4.5" rx="0.5" fill="#EDA200"/>
+  <rect x="13.4" y="11.5" width="2" height="2.5" rx="0.5" fill="#DB5860"/>
+  <!-- The pulse the bars are read against. -->
+  <path d="M1 4.5H4L5.5 1.8L7.5 5.2L9 3.2L10.5 4.5H15" stroke="#6E6E6E" stroke-width="1.1"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

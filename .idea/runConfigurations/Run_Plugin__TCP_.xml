@@ -1,0 +1,30 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Plugin (TCP)" type="GradleRunConfiguration" factoryName="Gradle">
+    <log_file alias="Sandbox IDE log"
+              path="$PROJECT_DIR$/clients/intellij/.intellijPlatform/sandbox/*/*/log/idea.log"
+              show_all="true" />
+    <ExternalSystemSettings>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$/clients/intellij" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <!-- Connect to a server started by `LSP Server (TCP)` instead of
+           spawning one. Start that configuration first: the platform tries the
+           socket once and does not retry. -->
+      <option name="scriptParameters" value="-PdebugPort=9257" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value="runIde" />
+        </list>
+      </option>
+      <option name="vmOptions" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <RunAsTest>false</RunAsTest>
+    <method v="2" />
+  </configuration>
+</component>

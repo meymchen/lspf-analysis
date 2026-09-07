@@ -13,3 +13,11 @@ clients/vscode/dist/
 clients/vscode/out/
 clients/vscode/server/
 *.vsix
+
+# JetBrains IDEs. Only the run/debug configurations are shared, so a clone on
+# another machine debugs the same way `.vscode/launch.json` lets it. The rest
+# of `.idea/`, and the module files, describe one local installation and the
+# IDE regenerates them on open.
+.idea/*
+!.idea/runConfigurations/
+*.iml
