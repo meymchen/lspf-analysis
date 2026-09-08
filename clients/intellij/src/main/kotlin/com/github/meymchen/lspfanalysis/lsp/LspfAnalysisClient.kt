@@ -32,18 +32,15 @@ object LspfAnalysisClient {
         return hover.contents?.right?.takeIf { it.kind == MarkupKind.MARKDOWN }?.value
     }
 
-    private fun client(project: Project): LspClient? =
-        LspClientManager.getInstance(project)
-            .getClients(LspfAnalysisIntegrationProvider::class.java)
-            .firstOrNull()
+    private fun client(project: Project): LspClient? = LspClientManager.getInstance(project)
+        .getClients(LspfAnalysisIntegrationProvider::class.java)
+        .firstOrNull()
 
     /** The URI the server knows `file` by, or `null` before the server starts. */
-    fun fileUri(project: Project, file: VirtualFile): String? =
-        client(project)?.descriptor?.getFileUri(file)
+    fun fileUri(project: Project, file: VirtualFile): String? = client(project)?.descriptor?.getFileUri(file)
 
     /** The file behind a URI the server sent us. */
-    fun findFile(project: Project, uri: String): VirtualFile? =
-        client(project)?.descriptor?.findFileByUri(uri)
+    fun findFile(project: Project, uri: String): VirtualFile? = client(project)?.descriptor?.findFileByUri(uri)
 
     /**
      * Asks the server for one document's per-function breakdown.

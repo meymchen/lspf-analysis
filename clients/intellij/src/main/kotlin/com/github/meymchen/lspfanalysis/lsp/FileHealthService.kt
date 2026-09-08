@@ -1,11 +1,11 @@
 package com.github.meymchen.lspfanalysis.lsp
 
 import com.github.meymchen.lspfanalysis.model.FileHealth
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.psi.PsiManager
 import com.intellij.util.messages.Topic
 import java.util.concurrent.ConcurrentHashMap

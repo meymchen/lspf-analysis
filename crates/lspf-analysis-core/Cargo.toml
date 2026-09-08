@@ -14,6 +14,9 @@ description = "Code metrics and health scoring engine behind the lspf-analysis l
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "katex.html"]
 
+[lints]
+workspace = true
+
 [dependencies]
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset.workspace = true

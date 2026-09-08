@@ -34,8 +34,9 @@ private val GRADE_COLOURS = mapOf(
 )
 
 /** Colour the grade letters and keep empty cells. */
-internal fun healthHoverHtml(project: Project, markdown: String): String =
-    DocMarkdownToHtmlConverter.convert(project, markdown.lineSequence().joinToString("\n") { line ->
+internal fun healthHoverHtml(project: Project, markdown: String): String = DocMarkdownToHtmlConverter.convert(
+    project,
+    markdown.lineSequence().joinToString("\n") { line ->
         // A letter, not a span: a row the server already coloured is left
         // alone rather than wrapped twice.
         val graded = GRADE_CELL.replace(line) { match ->
@@ -44,4 +45,5 @@ internal fun healthHoverHtml(project: Project, markdown: String): String =
             """| <span style="color:#$hex;">$grade</span> |"""
         }
         EMPTY_CELL.replace(graded, "| &nbsp; ")
-    })
+    },
+)

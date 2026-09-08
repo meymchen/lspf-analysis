@@ -24,10 +24,10 @@ export type Translate = (message: string, ...args: Array<string | number>) => st
  * visible `{3}` in it is a bug that shows itself.
  */
 export function fill(message: string, args: Array<string | number>): string {
-    return message.replace(/\{(\d+)\}/g, (placeholder, index: string) => {
-        const argument = args[Number(index)];
-        return argument === undefined ? placeholder : String(argument);
-    });
+  return message.replace(/\{(\d+)\}/g, (placeholder, index: string) => {
+    const argument = args[Number(index)];
+    return argument === undefined ? placeholder : String(argument);
+  });
 }
 
 let translate: Translate | undefined;
@@ -39,12 +39,12 @@ let translate: Translate | undefined;
  * use to read the source strings back.
  */
 export function useTranslator(translator: Translate | undefined): void {
-    translate = translator;
+  translate = translator;
 }
 
 /** Translates one message. */
 export const t: Translate = (message, ...args) =>
-    translate ? translate(message, ...args) : fill(message, args);
+  translate ? translate(message, ...args) : fill(message, args);
 
 /**
  * The display name of a pillar the server named.
@@ -55,38 +55,38 @@ export const t: Translate = (message, ...args) =>
  * under the name it arrived with rather than dropped.
  */
 export function pillarLabel(name: string): string {
-    switch (name) {
-        case 'control flow':
-            return t('control flow');
-        case 'size':
-            return t('size');
-        case 'vocabulary load':
-            return t('vocabulary load');
-        case 'interface':
-            return t('interface');
-        default:
-            return name;
-    }
+  switch (name) {
+    case 'control flow':
+      return t('control flow');
+    case 'size':
+      return t('size');
+    case 'vocabulary load':
+      return t('vocabulary load');
+    case 'interface':
+      return t('interface');
+    default:
+      return name;
+  }
 }
 
 /** The display name of a metric the server named. */
 export function measureLabel(name: string): string {
-    switch (name) {
-        case 'cognitive complexity':
-            return t('cognitive complexity');
-        case 'cyclomatic complexity':
-            return t('cyclomatic complexity');
-        case 'statements':
-            return t('statements');
-        case 'working memory':
-            return t('working memory');
-        case 'Halstead difficulty':
-            return t('Halstead difficulty');
-        case 'parameters':
-            return t('parameters');
-        default:
-            return name;
-    }
+  switch (name) {
+    case 'cognitive complexity':
+      return t('cognitive complexity');
+    case 'cyclomatic complexity':
+      return t('cyclomatic complexity');
+    case 'statements':
+      return t('statements');
+    case 'working memory':
+      return t('working memory');
+    case 'Halstead difficulty':
+      return t('Halstead difficulty');
+    case 'parameters':
+      return t('parameters');
+    default:
+      return name;
+  }
 }
 
 /**
@@ -96,21 +96,21 @@ export function measureLabel(name: string): string {
  * the one name here that is ours to say rather than the reader's.
  */
 export function functionLabel(name: string): string {
-    return name === '<anonymous>' ? t('<anonymous>') : name;
+  return name === '<anonymous>' ? t('<anonymous>') : name;
 }
 
 /** The display name of a band. */
 export function gradeLabel(grade: string): string {
-    switch (grade) {
-        case 'excellent':
-            return t('excellent');
-        case 'good':
-            return t('good');
-        case 'fair':
-            return t('fair');
-        case 'poor':
-            return t('poor');
-        default:
-            return grade;
-    }
+  switch (grade) {
+    case 'excellent':
+      return t('excellent');
+    case 'good':
+      return t('good');
+    case 'fair':
+      return t('fair');
+    case 'poor':
+      return t('poor');
+    default:
+      return grade;
+  }
 }

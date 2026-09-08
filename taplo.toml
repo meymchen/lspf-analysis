@@ -1,0 +1,24 @@
+# taplo's defaults already match .editorconfig for TOML: a two-space indent, LF
+# line endings, and keys left in the order they were written. indent_string is
+# stated anyway, so that changing .editorconfig without changing this file shows
+# up as a disagreement rather than passing silently.
+
+include = ["**/*.toml"]
+
+# Build output. .intellijPlatform holds a downloaded IDE and a sandbox running
+# it, which brings its own TOML along.
+exclude = [
+  "**/node_modules/**",
+  "target/**",
+  "enums/target/**",
+  "clients/intellij/build/**",
+  "clients/intellij/.gradle/**",
+  "clients/intellij/.intellijPlatform/**",
+]
+
+[formatting]
+indent_string = "  "
+# taplo's own default is 80, which splits a Cargo.toml dependency line across
+# five. 100 is what the Rust code is held to, and .editorconfig says the same
+# for *.toml.
+column_width = 100

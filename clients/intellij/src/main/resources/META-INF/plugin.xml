@@ -1,65 +1,65 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.meymchen.lspfanalysis</id>
-    <name>LSPF Analysis</name>
-    <vendor url="https://github.com/meymchen/lspf-analysis">meymchen</vendor>
+  <id>com.github.meymchen.lspfanalysis</id>
+  <name>LSPF Analysis</name>
+  <vendor url="https://github.com/meymchen/lspf-analysis">meymchen</vendor>
 
-    <description><![CDATA[
-        <p>Tells you, while you type, which functions are getting hard to work with.</p>
-        <p>Hovering the gutter icon beside a function or class shows its measurements,
-        while hovering its name keeps the IDE's original documentation. A function below the quality
-        threshold gets a warning on its signature line. The status bar carries the file as
-        a whole, and the <b>Function Health</b> tool window lists every function at once,
-        worst first, down to the individual measure that set each pillar.</p>
-        <p>Supported languages: C++, Java, JavaScript, Python, Rust, TypeScript, TSX.</p>
-    ]]></description>
+  <description><![CDATA[
+    <p>Tells you, while you type, which functions are getting hard to work with.</p>
+    <p>Hovering the gutter icon beside a function or class shows its measurements,
+    while hovering its name keeps the IDE's original documentation. A function below the quality
+    threshold gets a warning on its signature line. The status bar carries the file as
+    a whole, and the <b>Function Health</b> tool window lists every function at once,
+    worst first, down to the individual measure that set each pillar.</p>
+    <p>Supported languages: C++, Java, JavaScript, Python, Rust, TypeScript, TSX.</p>
+  ]]></description>
 
-    <depends>com.intellij.modules.platform</depends>
-    <!-- The LSP client API, open source and available in every IDE since 2026.1.4. -->
-    <depends>com.intellij.modules.lsp</depends>
+  <depends>com.intellij.modules.platform</depends>
+  <!-- The LSP client API, open source and available in every IDE since 2026.1.4. -->
+  <depends>com.intellij.modules.lsp</depends>
 
-    <resource-bundle>messages.LspfAnalysisBundle</resource-bundle>
+  <resource-bundle>messages.LspfAnalysisBundle</resource-bundle>
 
-    <extensions defaultExtensionNs="com.intellij">
-        <codeInsight.lineMarkerProvider language=""
-            implementationClass="com.github.meymchen.lspfanalysis.ui.HealthLineMarkerProvider"/>
-        <platform.lsp.integrationProvider
-            implementation="com.github.meymchen.lspfanalysis.lsp.LspfAnalysisIntegrationProvider"/>
+  <extensions defaultExtensionNs="com.intellij">
+    <codeInsight.lineMarkerProvider language=""
+      implementationClass="com.github.meymchen.lspfanalysis.ui.HealthLineMarkerProvider"/>
+    <platform.lsp.integrationProvider
+      implementation="com.github.meymchen.lspfanalysis.lsp.LspfAnalysisIntegrationProvider"/>
 
-        <postStartupActivity
-            implementation="com.github.meymchen.lspfanalysis.LspfAnalysisStartup"/>
+    <postStartupActivity
+      implementation="com.github.meymchen.lspfanalysis.LspfAnalysisStartup"/>
 
-        <toolWindow id="Function Health"
-                    anchor="right"
-                    icon="com.github.meymchen.lspfanalysis.LspfAnalysisIcons.Logo"
-                    factoryClass="com.github.meymchen.lspfanalysis.ui.FunctionHealthToolWindowFactory"/>
+    <toolWindow id="Function Health"
+                anchor="right"
+                icon="com.github.meymchen.lspfanalysis.LspfAnalysisIcons.Logo"
+                factoryClass="com.github.meymchen.lspfanalysis.ui.FunctionHealthToolWindowFactory"/>
 
-        <statusBarWidgetFactory id="LspfAnalysis.fileHealth"
-                                implementation="com.github.meymchen.lspfanalysis.ui.FileHealthWidgetFactory"/>
+    <statusBarWidgetFactory id="LspfAnalysis.fileHealth"
+                            implementation="com.github.meymchen.lspfanalysis.ui.FileHealthWidgetFactory"/>
 
-        <projectConfigurable
-            id="lspfAnalysis.settings"
-            parentId="tools"
-            key="settings.title"
-            bundle="messages.LspfAnalysisBundle"
-            instance="com.github.meymchen.lspfanalysis.settings.LspfAnalysisConfigurable"/>
+    <projectConfigurable
+      id="lspfAnalysis.settings"
+      parentId="tools"
+      key="settings.title"
+      bundle="messages.LspfAnalysisBundle"
+      instance="com.github.meymchen.lspfanalysis.settings.LspfAnalysisConfigurable"/>
 
-        <notificationGroup id="LSPF Analysis" displayType="BALLOON" bundle="messages.LspfAnalysisBundle"
-                           key="notification.group"/>
-    </extensions>
+    <notificationGroup id="LSPF Analysis" displayType="BALLOON" bundle="messages.LspfAnalysisBundle"
+                       key="notification.group"/>
+  </extensions>
 
-    <actions>
-        <action id="LspfAnalysis.RestartServer"
-                class="com.github.meymchen.lspfanalysis.ui.RestartServerAction"
-                icon="AllIcons.Actions.Restart"/>
+  <actions>
+    <action id="LspfAnalysis.RestartServer"
+            class="com.github.meymchen.lspfanalysis.ui.RestartServerAction"
+            icon="AllIcons.Actions.Restart"/>
 
-        <!-- Shown in the Function Health toolbar, one at a time: whichever order
-             the view is not currently in. -->
-        <action id="LspfAnalysis.SortByQuality"
-                class="com.github.meymchen.lspfanalysis.ui.SortByQualityAction"
-                icon="AllIcons.ObjectBrowser.SortByType"/>
-        <action id="LspfAnalysis.SortByPosition"
-                class="com.github.meymchen.lspfanalysis.ui.SortByPositionAction"
-                icon="AllIcons.ObjectBrowser.Sorted"/>
-    </actions>
+    <!-- Shown in the Function Health toolbar, one at a time: whichever order
+         the view is not currently in. -->
+    <action id="LspfAnalysis.SortByQuality"
+            class="com.github.meymchen.lspfanalysis.ui.SortByQualityAction"
+            icon="AllIcons.ObjectBrowser.SortByType"/>
+    <action id="LspfAnalysis.SortByPosition"
+            class="com.github.meymchen.lspfanalysis.ui.SortByPositionAction"
+            icon="AllIcons.ObjectBrowser.Sorted"/>
+  </actions>
 </idea-plugin>

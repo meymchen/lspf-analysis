@@ -55,8 +55,7 @@ object Messages {
     }
 
     /** Translates one message. */
-    fun t(key: String, vararg args: Any): String =
-        translate?.message(key, args) ?: fill(key, args)
+    fun t(key: String, vararg args: Any): String = translate?.message(key, args) ?: fill(key, args)
 
     /**
      * Formats the English source string for `key`.
@@ -108,8 +107,7 @@ fun measureLabel(name: String): String = when (name) {
  * `<anonymous>` is the server's stand-in for a function with no name, and is
  * the one name here that is ours to say rather than the reader's.
  */
-fun functionLabel(name: String): String =
-    if (name == "<anonymous>") t("label.anonymous") else name
+fun functionLabel(name: String): String = if (name == "<anonymous>") t("label.anonymous") else name
 
 /** The display name of a band. */
 fun gradeLabel(grade: String): String = when (grade) {

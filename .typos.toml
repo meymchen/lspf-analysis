@@ -5,6 +5,4 @@
 [default.extend-words]
 
 [files]
-extend-exclude = [
-    "crates/lspf-analysis-core/src/languages/",
-]
+extend-exclude = ["crates/lspf-analysis-core/src/languages/"]

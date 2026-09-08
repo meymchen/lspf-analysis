@@ -27,7 +27,7 @@ fun renderStatus(health: FileHealth): StatusPresentation {
     val tooltip = html {
         line(
             "<b>${escape(t("plugin.name"))}</b>  ·  <b>$quality%</b>  ·  " +
-                escape(gradeLabel(health.grade))
+                escape(gradeLabel(health.grade)),
         )
         line("<code>${bar(health.quality)}</code>")
 
@@ -40,8 +40,8 @@ fun renderStatus(health: FileHealth): StatusPresentation {
                         t("status.oneFunction", 1, health.below)
                     } else {
                         t("status.manyFunctions", health.functions, health.below)
-                    }
-                )
+                    },
+                ),
             )
             line("<code>${bandLine(health.bands, health.functions)}</code>")
             line(bandTable(health.bands))

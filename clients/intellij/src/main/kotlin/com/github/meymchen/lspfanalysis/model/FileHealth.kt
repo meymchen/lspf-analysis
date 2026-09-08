@@ -5,12 +5,7 @@ import com.google.gson.JsonElement
 /** The `lspfAnalysis/fileHealth` notification the server pushes per file. */
 const val FILE_HEALTH_METHOD: String = "lspfAnalysis/fileHealth"
 
-data class Bands(
-    val excellent: Int,
-    val good: Int,
-    val fair: Int,
-    val poor: Int,
-)
+data class Bands(val excellent: Int, val good: Int, val fair: Int, val poor: Int)
 
 data class WorstFunction(
     val name: String,

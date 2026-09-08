@@ -5,9 +5,7 @@
       "label": "build language server",
       "type": "process",
       "command": "cargo",
-      "args": [
-        "build"
-      ],
+      "args": ["build"],
       "problemMatcher": "$rustc",
       "group": {
         "kind": "build",
@@ -18,32 +16,20 @@
       "label": "install extension dependencies",
       "type": "shell",
       "command": "npm",
-      "args": [
-        "--prefix",
-        "clients/vscode",
-        "install"
-      ],
+      "args": ["--prefix", "clients/vscode", "install"],
       "problemMatcher": []
     },
     {
       "label": "bundle extension",
       "type": "shell",
       "command": "npm",
-      "args": [
-        "--prefix",
-        "clients/vscode",
-        "run",
-        "bundle"
-      ],
+      "args": ["--prefix", "clients/vscode", "run", "bundle"],
       "problemMatcher": "$tsc"
     },
     {
       "label": "prepare extension development host",
       "dependsOrder": "sequence",
-      "dependsOn": [
-        "install extension dependencies",
-        "bundle extension"
-      ],
+      "dependsOn": ["install extension dependencies", "bundle extension"],
       "problemMatcher": []
     },
     {
@@ -59,10 +45,7 @@
       "label": "test language server",
       "type": "process",
       "command": "cargo",
-      "args": [
-        "test",
-        "--workspace"
-      ],
+      "args": ["test", "--workspace"],
       "problemMatcher": "$rustc",
       "group": "test"
     },
@@ -70,21 +53,14 @@
       "label": "test extension",
       "type": "shell",
       "command": "npm",
-      "args": [
-        "--prefix",
-        "clients/vscode",
-        "test"
-      ],
+      "args": ["--prefix", "clients/vscode", "test"],
       "problemMatcher": "$tsc",
       "group": "test"
     },
     {
       "label": "test all",
       "dependsOrder": "sequence",
-      "dependsOn": [
-        "test language server",
-        "test extension"
-      ],
+      "dependsOn": ["test language server", "test extension"],
       "problemMatcher": [],
       "group": {
         "kind": "test",

@@ -19,19 +19,20 @@ import com.github.meymchen.lspfanalysis.model.measureTooltip
 import com.github.meymchen.lspfanalysis.model.pillarDescription
 import com.github.meymchen.lspfanalysis.model.pillarLabel
 import com.github.meymchen.lspfanalysis.model.sortFunctions
+import com.intellij.ide.util.treeView.TreeState
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionManager
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DefaultActionGroup
-import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.ui.ColoredTreeCellRenderer
@@ -40,7 +41,6 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.util.Alarm
 import com.intellij.util.ui.tree.TreeUtil
-import com.intellij.ide.util.treeView.TreeState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,10 +88,8 @@ private sealed interface Row {
  * file at once and keeps its own space, which is what makes it worth having
  * alongside.
  */
-internal class FunctionHealthPanel(
-    private val project: Project,
-    parent: Disposable,
-) : SimpleToolWindowPanel(true, true) {
+internal class FunctionHealthPanel(private val project: Project, parent: Disposable) :
+    SimpleToolWindowPanel(true, true) {
 
     private val root = DefaultMutableTreeNode()
     private val model = DefaultTreeModel(root)

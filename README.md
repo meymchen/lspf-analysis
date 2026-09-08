@@ -28,25 +28,25 @@ Quality is blended from four pillars. Each pillar takes the **worst** of its
 metrics rather than their average, so a function cannot hide a bad number
 behind a good one, and no property is counted twice.
 
-| Pillar | Metric | Default threshold | Evidence |
-| --- | --- | ---: | --- |
-| **Control flow** | cognitive complexity | 15 | [Campbell 2018][c18], validated against measured understandability by [Muñoz Barón et al. 2020][mb20] |
-| | cyclomatic complexity | 10 | [McCabe 1976][mc76]; not redundant with size at method level, [Landman et al. 2016][la16] |
-| **Size** | statements (logical lines) | 30 | unit size in the SIG model, [Heitlager et al. 2007][hkv07], [SIG/TÜViT][sig] |
-| **Vocabulary load** | names held at once | 8 | [Miller 1956][mi56], [Cowan 2001][co01] |
-| | Halstead difficulty | 12 | vocabulary size is what loads working memory, [Peitek et al. 2021][pe21] |
-| **Interface** | parameters | 4 | unit interfacing in the SIG model; the smell with the highest defect correlation in [Topuz 2022][to22] |
+| Pillar              | Metric                     | Default threshold | Evidence                                                                                               |
+| ------------------- | -------------------------- | ----------------: | ------------------------------------------------------------------------------------------------------ |
+| **Control flow**    | cognitive complexity       |                15 | [Campbell 2018][c18], validated against measured understandability by [Muñoz Barón et al. 2020][mb20]  |
+|                     | cyclomatic complexity      |                10 | [McCabe 1976][mc76]; not redundant with size at method level, [Landman et al. 2016][la16]              |
+| **Size**            | statements (logical lines) |                30 | unit size in the SIG model, [Heitlager et al. 2007][hkv07], [SIG/TÜViT][sig]                           |
+| **Vocabulary load** | names held at once         |                 8 | [Miller 1956][mi56], [Cowan 2001][co01]                                                                |
+|                     | Halstead difficulty        |                12 | vocabulary size is what loads working memory, [Peitek et al. 2021][pe21]                               |
+| **Interface**       | parameters                 |                 4 | unit interfacing in the SIG model; the smell with the highest defect correlation in [Topuz 2022][to22] |
 
 Class design has a separate scoring pillar. Its current thresholds come from
 Java corpora, so only Java classes are scored. C++ class metrics are computed
 and reported, but do not affect health scores until suitable thresholds are
 established. Other languages without class metrics remain outside this pillar.
 
-| Pillar | Metric | Default threshold | Evidence |
-| --- | --- | ---: | --- |
-| **Class design** | weighted methods per class | 34 | where "uncommon" starts in a benchmark of the 111 Java systems in the Qualitas.class Corpus, [Filó et al. 2015][fi15] |
-| | public methods | 14 | the same catalogue's boundary for methods per class, read conservatively; [Ferreira et al. 2012][fe12] |
-| | public attributes | 8 | the same, for fields per class |
+| Pillar           | Metric                     | Default threshold | Evidence                                                                                                              |
+| ---------------- | -------------------------- | ----------------: | --------------------------------------------------------------------------------------------------------------------- |
+| **Class design** | weighted methods per class |                34 | where "uncommon" starts in a benchmark of the 111 Java systems in the Qualitas.class Corpus, [Filó et al. 2015][fi15] |
+|                  | public methods             |                14 | the same catalogue's boundary for methods per class, read conservatively; [Ferreira et al. 2012][fe12]                |
+|                  | public attributes          |                 8 | the same, for fields per class                                                                                        |
 
 ### The formula
 
@@ -168,7 +168,7 @@ about evidence, not an oversight.
   size ([Heitlager et al. 2007][hkv07], [van Deursen 2014][vd14],
   [El Emam et al. 2001][ee01], [Sjøberg et al. 2012][sj12]).
 - **Comment density** — the replicated findings concern whether comments are
-  *accurate*, not how many there are ([Rani et al. 2023][ra23]).
+  _accurate_, not how many there are ([Rani et al. 2023][ra23]).
 - **Number of exit points** — the single-exit rule is argued in style guides
   on both sides, but a literature search turns up no controlled study
   relating exit count to defects or comprehension.
@@ -181,79 +181,76 @@ about evidence, not an oversight.
 
 ### Defaults
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| `complexityThreshold` | 15 | Cognitive complexity scoring 50% |
-| `cyclomaticThreshold` | 10 | Cyclomatic complexity scoring 50% |
-| `lengthThreshold` | 30 | Statements scoring 50% |
-| `workingMemoryThreshold` | 8 | Names scoring 50% |
-| `halsteadDifficultyThreshold` | 12 | Halstead difficulty scoring 50% |
-| `parametersThreshold` | 4 | Parameters scoring 50% |
-| `wmcThreshold` | 34 | Weighted methods per class scoring 50% |
-| `publicMethodsThreshold` | 14 | Public methods per class scoring 50% |
-| `publicAttributesThreshold` | 8 | Public attributes per class scoring 50% |
-| `weights` | 1 / 1 / 1 / 0.5 | Relative pillar weights, normalized before use |
-| `weights.classDesign` | 0.5 | How much a file's classes weigh against its functions |
-| `qualityWarn` | 25 | Below this, a function is reported |
-| `qualityError` | 10 | Below this, it is an error rather than a warning |
+| Setting                       | Default         | Meaning                                               |
+| ----------------------------- | --------------- | ----------------------------------------------------- |
+| `complexityThreshold`         | 15              | Cognitive complexity scoring 50%                      |
+| `cyclomaticThreshold`         | 10              | Cyclomatic complexity scoring 50%                     |
+| `lengthThreshold`             | 30              | Statements scoring 50%                                |
+| `workingMemoryThreshold`      | 8               | Names scoring 50%                                     |
+| `halsteadDifficultyThreshold` | 12              | Halstead difficulty scoring 50%                       |
+| `parametersThreshold`         | 4               | Parameters scoring 50%                                |
+| `wmcThreshold`                | 34              | Weighted methods per class scoring 50%                |
+| `publicMethodsThreshold`      | 14              | Public methods per class scoring 50%                  |
+| `publicAttributesThreshold`   | 8               | Public attributes per class scoring 50%               |
+| `weights`                     | 1 / 1 / 1 / 0.5 | Relative pillar weights, normalized before use        |
+| `weights.classDesign`         | 0.5             | How much a file's classes weigh against its functions |
+| `qualityWarn`                 | 25              | Below this, a function is reported                    |
+| `qualityError`                | 10              | Below this, it is an error rather than a warning      |
 
 The three thresholds that predate the fourth pillar keep their names, so a
 configuration written for the earlier model still means what it meant.
 
 ### References
 
-- \[c18\] G. A. Campbell. *Cognitive Complexity: an overview and evaluation.*
+- \[c18\] G. A. Campbell. _Cognitive Complexity: an overview and evaluation._
   TechDebt 2018. <https://doi.org/10.1145/3194164.3194186>
-- \[mb20\] M. Muñoz Barón, M. Wyrich, S. Wagner. *An Empirical Validation of
-  Cognitive Complexity as a Measure of Source Code Understandability.* ESEM
-  2020. <https://doi.org/10.1145/3382494.3410636> — see also L. Lavazza et
+- \[mb20\] M. Muñoz Barón, M. Wyrich, S. Wagner. _An Empirical Validation of
+  Cognitive Complexity as a Measure of Source Code Understandability._ ESEM 2020. <https://doi.org/10.1145/3382494.3410636> — see also L. Lavazza et
   al., JSS 197 (2023), <https://doi.org/10.1016/j.jss.2022.111561>, which is
   more sceptical that it improves on older measures.
-- \[mc76\] T. J. McCabe. *A Complexity Measure.* IEEE TSE SE-2(4), 1976.
+- \[mc76\] T. J. McCabe. _A Complexity Measure._ IEEE TSE SE-2(4), 1976.
   <https://doi.org/10.1109/TSE.1976.233837>
-- \[la16\] D. Landman, A. Serebrenik, E. Bouwers, J. J. Vinju. *Empirical
+- \[la16\] D. Landman, A. Serebrenik, E. Bouwers, J. J. Vinju. _Empirical
   analysis of the relationship between CC and SLOC in a large corpus of Java
-  methods and C functions.* JSEP 28(7), 2016.
+  methods and C functions._ JSEP 28(7), 2016.
   <https://doi.org/10.1002/smr.1760>
-- \[hkv07\] I. Heitlager, T. Kuipers, J. Visser. *A Practical Model for
-  Measuring Maintainability.* QUATIC 2007.
+- \[hkv07\] I. Heitlager, T. Kuipers, J. Visser. _A Practical Model for
+  Measuring Maintainability._ QUATIC 2007.
   <https://doi.org/10.1109/QUATIC.2007.7>
-- \[sig\] SIG/TÜV NORD CERT. *Evaluation Criteria Trusted Product
-  Maintainability.* Thresholds calibrated per T. L. Alves, C. Ypma,
-  J. Visser, *Deriving metric thresholds from benchmark data*, ICSM 2010.
+- \[sig\] SIG/TÜV NORD CERT. _Evaluation Criteria Trusted Product
+  Maintainability._ Thresholds calibrated per T. L. Alves, C. Ypma,
+  J. Visser, _Deriving metric thresholds from benchmark data_, ICSM 2010.
   <https://doi.org/10.1109/ICSM.2010.5609747>
-- \[mi56\] G. A. Miller. *The magical number seven, plus or minus two.*
+- \[mi56\] G. A. Miller. _The magical number seven, plus or minus two._
   Psychological Review 63(2), 1956. <https://doi.org/10.1037/h0043158>
-- \[co01\] N. Cowan. *The magical number 4 in short-term memory.* Behavioral
+- \[co01\] N. Cowan. _The magical number 4 in short-term memory._ Behavioral
   and Brain Sciences 24(1), 2001.
   <https://doi.org/10.1017/S0140525X01003922>
-- \[pe21\] N. Peitek, S. Apel, C. Parnin, A. Brechmann, J. Siegmund. *Program
-  Comprehension and Code Complexity Metrics: An fMRI Study.* ICSE 2021.
+- \[pe21\] N. Peitek, S. Apel, C. Parnin, A. Brechmann, J. Siegmund. _Program
+  Comprehension and Code Complexity Metrics: An fMRI Study._ ICSE 2021.
   <https://doi.org/10.1109/ICSE43902.2021.00056>
-- \[to22\] F. N. Topuz. *Empirical Evidence of the Consequences of Bad Smells in
-  Software.* Auburn University, 2022.
+- \[to22\] F. N. Topuz. _Empirical Evidence of the Consequences of Bad Smells in
+  Software._ Auburn University, 2022.
   <https://etd.auburn.edu/handle/10415/8100>
-- \[vd14\] A. van Deursen. *Think Twice Before Using the "Maintainability
-  Index".* 2014.
+- \[vd14\] A. van Deursen. _Think Twice Before Using the "Maintainability
+  Index"._ 2014.
   <https://avandeursen.com/2014/08/29/think-twice-before-using-the-maintainability-index/>
-- \[ee01\] K. El Emam, S. Benlarbi, N. Goel, S. N. Rai. *The Confounding Effect
-  of Class Size on the Validity of Object-Oriented Metrics.* IEEE TSE 27(7),
-  2001. <https://doi.org/10.1109/32.935855>
-- \[sj12\] D. I. K. Sjøberg, B. Anda, A. Mockus. *Questioning software
-  maintenance metrics.* ESEM 2012.
+- \[ee01\] K. El Emam, S. Benlarbi, N. Goel, S. N. Rai. _The Confounding Effect
+  of Class Size on the Validity of Object-Oriented Metrics._ IEEE TSE 27(7), 2001. <https://doi.org/10.1109/32.935855>
+- \[sj12\] D. I. K. Sjøberg, B. Anda, A. Mockus. _Questioning software
+  maintenance metrics._ ESEM 2012.
   <https://doi.org/10.1145/2372251.2372269>
-- \[ra23\] P. Rani, A. Blasi, N. Stulova, et al. *A decade of code comment
-  quality assessment: a systematic literature review.* JSS 195, 2023.
+- \[ra23\] P. Rani, A. Blasi, N. Stulova, et al. _A decade of code comment
+  quality assessment: a systematic literature review._ JSS 195, 2023.
   <https://doi.org/10.1016/j.jss.2022.111515>
-- \[fi15\] T. Filó, M. Bigonha, K. Ferreira. *A Catalogue of Thresholds for
-  Object-Oriented Software Metrics.* SOFTENG 2015.
+- \[fi15\] T. Filó, M. Bigonha, K. Ferreira. _A Catalogue of Thresholds for
+  Object-Oriented Software Metrics._ SOFTENG 2015.
   <https://personales.upv.es/thinkmind/dl/conferences/softeng/softeng_2015/softeng_2015_3_10_55070.pdf>
   — evaluated for bad-smell detection and fault prediction in the same
   authors' JBCS 2024 follow-up,
   <https://journals-sol.sbc.org.br/index.php/jbcs/article/view/3373>
 - \[fe12\] K. Ferreira, M. Bigonha, R. Bigonha, L. Mendes, H. Almeida.
-  *Identifying thresholds for object-oriented software metrics.* JSS 85(2),
-  2012. <https://doi.org/10.1016/j.jss.2011.05.044>
+  _Identifying thresholds for object-oriented software metrics._ JSS 85(2), 2012. <https://doi.org/10.1016/j.jss.2011.05.044>
 
 [c18]: https://doi.org/10.1145/3194164.3194186
 [mb20]: https://doi.org/10.1145/3382494.3410636

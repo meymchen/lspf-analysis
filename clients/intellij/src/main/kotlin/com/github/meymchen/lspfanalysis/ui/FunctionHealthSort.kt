@@ -52,7 +52,8 @@ internal abstract class SortAction(private val target: Sort) : DumbAwareAction()
     override fun update(event: AnActionEvent) {
         val project = event.project
         event.presentation.isEnabledAndVisible =
-            project != null && FunctionHealthSort.getInstance(project).sort != target
+            project != null &&
+            FunctionHealthSort.getInstance(project).sort != target
     }
 
     override fun actionPerformed(event: AnActionEvent) {

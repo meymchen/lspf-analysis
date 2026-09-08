@@ -78,7 +78,7 @@ fun functionTooltip(detail: FunctionDetail): String = html {
     line(
         "<b><code>${escape(functionLabel(detail.name))}</code></b>  ·  " +
             "${escape(t("label.quality"))} <b>${rounded(detail.quality)}%</b>  ·  " +
-            escape(gradeLabel(detail.grade))
+            escape(gradeLabel(detail.grade)),
     )
     line("<code>${bar(detail.quality)}</code>")
     line(escape(t("function.lines", detail.startLine, detail.endLine)))
@@ -89,7 +89,7 @@ fun functionTooltip(detail: FunctionDetail): String = html {
                 "function.weakest",
                 escape(pillarLabel(detail.weakestPillar)),
                 escape(measureLabel(detail.weakestMetric)),
-            )
+            ),
         )
     }
 }

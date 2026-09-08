@@ -245,6 +245,8 @@
   },
   "scripts": {
     "compile": "tsc -p .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
     "test:debug-transport": "cargo build --manifest-path ../../Cargo.toml -p lspf-analysis && npm run compile && node --test out/test/debugServer.integration.js",
     "bundle": "node esbuild.mjs",
@@ -264,6 +266,7 @@
     "@types/ws": "^8.18.1",
     "@vscode/vsce": "^3.6.0",
     "esbuild": "^0.25.0",
+    "prettier": "3.9.6",
     "typescript": "^5.9.0",
     "vscode-jsonrpc": "~8.2.1"
   }

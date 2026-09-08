@@ -20,9 +20,9 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.VirtualFile
@@ -175,31 +175,30 @@ private class GoToWorstFunction(
 
 // The popup is opened with an empty data context -- a status bar widget has no
 // editor or project to hand out -- so these carry the project themselves.
-private class ShowProblems(private val project: Project) : DumbAwareAction(
-    LspfAnalysisBundle.message("action.problems"),
-    null,
-    AllIcons.Toolwindows.ToolWindowProblems,
-) {
+private class ShowProblems(private val project: Project) :
+    DumbAwareAction(
+        LspfAnalysisBundle.message("action.problems"),
+        null,
+        AllIcons.Toolwindows.ToolWindowProblems,
+    ) {
     override fun actionPerformed(event: AnActionEvent) {
         ToolWindowManager.getInstance(project).getToolWindow(ToolWindowId.PROBLEMS_VIEW)?.activate(null)
     }
 }
 
-private class RestartServer(
-    private val project: Project,
-    text: String?,
-    icon: Icon?,
-) : DumbAwareAction(text, null, icon) {
+private class RestartServer(private val project: Project, text: String?, icon: Icon?) :
+    DumbAwareAction(text, null, icon) {
     override fun actionPerformed(event: AnActionEvent) {
         LspfAnalysisClient.restart(project)
     }
 }
 
-private class ShowSettings(private val project: Project) : DumbAwareAction(
-    LspfAnalysisBundle.message("action.settings"),
-    null,
-    AllIcons.General.Settings,
-) {
+private class ShowSettings(private val project: Project) :
+    DumbAwareAction(
+        LspfAnalysisBundle.message("action.settings"),
+        null,
+        AllIcons.General.Settings,
+    ) {
     override fun actionPerformed(event: AnActionEvent) {
         ShowSettingsUtil.getInstance().showSettingsDialog(project, LspfAnalysisConfigurable::class.java)
     }

@@ -45,16 +45,16 @@ worst-first and source order.
 
 Quality blends four pillars, each taking the worst of its metrics:
 
-| Pillar | What it measures | Metrics |
-| --- | --- | --- |
-| **Control flow** | How tangled the control flow is | cognitive and cyclomatic complexity |
-| **Size** | How much a function does | statements (logical lines) |
+| Pillar              | What it measures                | Metrics                             |
+| ------------------- | ------------------------------- | ----------------------------------- |
+| **Control flow**    | How tangled the control flow is | cognitive and cyclomatic complexity |
+| **Size**            | How much a function does        | statements (logical lines)          |
 | **Vocabulary load** | How many names you hold at once | working memory, Halstead difficulty |
-| **Interface** | How wide the signature is | parameters |
+| **Interface**       | How wide the signature is       | parameters                          |
 
 Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25),
 **poor** (<25). The formula, the thresholds and the papers behind each choice
-— including which metrics are deliberately *not* scored, and why — are in the
+— including which metrics are deliberately _not_ scored, and why — are in the
 [project README](https://github.com/meymchen/lspf-analysis#what-it-reports).
 
 ## Settings
@@ -67,29 +67,29 @@ Thresholds, weights and diagnostics are stored per project — a parser and a
 controller are not held to the same complexity. The server path is stored per
 IDE, because it follows the installation rather than the codebase.
 
-| Setting | Default | Meaning |
-| --- | --- | --- |
-| Cognitive complexity | 15 | Cognitive complexity scoring 50% |
-| Cyclomatic complexity | 10 | Cyclomatic complexity scoring 50% |
-| Statements | 30 | Statements scoring 50% |
-| Working memory | 8 | Names held at once scoring 50% |
-| Halstead difficulty | 12 | Halstead difficulty scoring 50% |
-| Parameters | 4 | Parameters scoring 50% |
-| Weighted methods per class | 34 | WMC scoring 50% |
-| Public methods per class | 14 | Public methods scoring 50% |
-| Public attributes per class | 8 | Public attributes scoring 50% |
-| Weights | 1 / 1 / 1 / 0.5 / 0.5 | Relative pillar weights, plus class design |
-| Warn below | 25 | Below this, a function is reported |
-| Error below | 10 | Below this, it is an error |
-| Publish diagnostics | on | Publish anything at all |
-| Also hint at one badly scoring pillar | off | For a function that passes overall |
-| Also report the file as a whole | off | When the file is bad enough to be an error |
-| Show the file's quality in the status bar | on | |
-| Show health icons in the editor gutter | on | Hover for function or class measurements |
-| Language server path | *(empty)* | Use this binary instead of the bundled one |
+| Setting                                   | Default               | Meaning                                    |
+| ----------------------------------------- | --------------------- | ------------------------------------------ |
+| Cognitive complexity                      | 15                    | Cognitive complexity scoring 50%           |
+| Cyclomatic complexity                     | 10                    | Cyclomatic complexity scoring 50%          |
+| Statements                                | 30                    | Statements scoring 50%                     |
+| Working memory                            | 8                     | Names held at once scoring 50%             |
+| Halstead difficulty                       | 12                    | Halstead difficulty scoring 50%            |
+| Parameters                                | 4                     | Parameters scoring 50%                     |
+| Weighted methods per class                | 34                    | WMC scoring 50%                            |
+| Public methods per class                  | 14                    | Public methods scoring 50%                 |
+| Public attributes per class               | 8                     | Public attributes scoring 50%              |
+| Weights                                   | 1 / 1 / 1 / 0.5 / 0.5 | Relative pillar weights, plus class design |
+| Warn below                                | 25                    | Below this, a function is reported         |
+| Error below                               | 10                    | Below this, it is an error                 |
+| Publish diagnostics                       | on                    | Publish anything at all                    |
+| Also hint at one badly scoring pillar     | off                   | For a function that passes overall         |
+| Also report the file as a whole           | off                   | When the file is bad enough to be an error |
+| Show the file's quality in the status bar | on                    |                                            |
+| Show health icons in the editor gutter    | on                    | Hover for function or class measurements   |
+| Language server path                      | _(empty)_             | Use this binary instead of the bundled one |
 
 There is no trace switch: the platform owns the LSP conversation and logs it
-itself. Turn on *Show in tool window* for the **LSP log: info, trace** category
+itself. Turn on _Show in tool window_ for the **LSP log: info, trace** category
 in **Settings | Appearance & Behavior | Notifications**.
 
 ## Actions
@@ -138,7 +138,7 @@ From a terminal in `clients/intellij`, use `./gradlew runIde` or
 for a JVM debugger on port 5005.
 
 Nothing about that needs the TCP setup below. TCP exists only for stepping
-through the *server*, which is a separate Rust process the debugger cannot reach
+through the _server_, which is a separate Rust process the debugger cannot reach
 through the plugin.
 
 ### Running against a server you started yourself
@@ -156,6 +156,7 @@ Two configurations, **in this order**:
    is a syntax error in PowerShell — so it would need a different command per
    OS. Gradle's `Exec` puts the variable straight into the child process, with
    no shell in between to disagree.
+
 2. **Run Plugin (TCP)** for IntelliJ IDEA or **Run Plugin (PyCharm, TCP)** for
    PyCharm — `-PdebugPort=9257` makes the
    plugin connect to that socket instead of spawning a process of its own.

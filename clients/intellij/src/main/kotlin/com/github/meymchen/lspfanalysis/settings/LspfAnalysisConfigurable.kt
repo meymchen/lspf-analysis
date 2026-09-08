@@ -3,18 +3,18 @@ package com.github.meymchen.lspfanalysis.settings
 import com.github.meymchen.lspfanalysis.LspfAnalysisBundle
 import com.github.meymchen.lspfanalysis.lsp.LspfAnalysisClient
 import com.github.meymchen.lspfanalysis.ui.refreshFileHealthWidget
-import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.openapi.options.BoundSearchableConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.Cell
 import com.intellij.ui.dsl.builder.Row
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.columns
 import com.intellij.ui.dsl.builder.panel
-import com.intellij.ui.components.JBTextField
 import kotlin.math.abs
 import kotlin.math.floor
 
@@ -25,11 +25,12 @@ import kotlin.math.floor
  * The split is the same one the VS Code client draws with `machine-overridable`
  * -- thresholds belong to a codebase, a path belongs to an installation.
  */
-class LspfAnalysisConfigurable(private val project: Project) : BoundSearchableConfigurable(
-    LspfAnalysisBundle.message("settings.title"),
-    "settings.lspfAnalysis",
-    "lspfAnalysis.settings",
-) {
+class LspfAnalysisConfigurable(private val project: Project) :
+    BoundSearchableConfigurable(
+        LspfAnalysisBundle.message("settings.title"),
+        "settings.lspfAnalysis",
+        "lspfAnalysis.settings",
+    ) {
 
     private val health get() = LspfAnalysisSettings.getInstance(project).state
     private val server get() = LspfAnalysisServerSettings.getInstance().state
