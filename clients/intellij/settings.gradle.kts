@@ -1,6 +1,6 @@
 import org.jetbrains.intellij.platform.gradle.extensions.intellijPlatform
 
-rootProject.name = "lspf-analysis-intellij"
+rootProject.name = "lspf-analysis"
 
 pluginManagement {
     plugins {
