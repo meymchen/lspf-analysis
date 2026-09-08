@@ -30,7 +30,6 @@ import argparse
 import pathlib
 import subprocess
 import sys
-import typing as T
 
 # The /tmp directory will be used as workdir
 WORKDIR = pathlib.Path("/tmp")
@@ -51,15 +50,15 @@ EXTENSIONS = {
 }
 
 # Run a subprocess.
-def run_subprocess(cmd: str, *args: T.Union[str, pathlib.Path]) -> None:
-    subprocess.run([cmd, *args])
+def run_subprocess(cmd: str, *args: str | pathlib.Path) -> None:
+    subprocess.run([cmd, *args], check=True)
 
 
 # Run lspf-analysis on the chosen repository to compute metrics.
 def run_metrics(
     repo_dir: pathlib.Path,
     output_dir: pathlib.Path,
-    include_grammars: T.List[str],
+    include_grammars: list[str],
 ) -> None:
     run_subprocess(
         "cargo",
@@ -83,7 +82,7 @@ def run_metrics(
 # Compute metrics before and after a tree-sitter-grammar update.
 def compute_metrics(args: argparse.Namespace) -> None:
 
-    if args.grammar not in EXTENSIONS.keys():
+    if args.grammar not in EXTENSIONS:
         print(args.grammar, "is not a valid tree-sitter grammar")
         sys.exit(1)
 

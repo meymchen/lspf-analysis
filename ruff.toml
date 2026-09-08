@@ -1,0 +1,3 @@
+[lint.per-file-ignores]
+# Preserve nested conditionals used by the complexity and health snapshots.
+"crates/lspf-analysis-core/tests/fixtures/simple.py" = ["SIM102"]
