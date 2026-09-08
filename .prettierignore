@@ -1,3 +1,7 @@
+# Markdown belongs to markdownlint-cli2, which keeps tables compact and leaves
+# the agent-facing documents alone. See .markdownlint-cli2.jsonc.
+*.md
+
 # Build output. .intellijPlatform holds a downloaded IDE and a sandbox running
 # it: tens of thousands of files, and the only reason a whole-tree run is slow
 # without this entry.

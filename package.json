@@ -1,12 +1,15 @@
 {
   "name": "lspf-analysis-tooling",
   "private": true,
-  "description": "Repository-wide formatting. The Rust workspace and each client build on their own; this package exists only so that Markdown, YAML, JSON and HTML have a formatter rather than an editor setting. Running Prettier from here also covers the clients, which pick up their own .prettierrc.json.",
+  "description": "Repository-wide formatting. The Rust workspace and each client build on their own; this package exists only so that YAML, JSON, HTML and Markdown have a formatter rather than an editor setting. Running Prettier from here also covers the clients, which pick up their own .prettierrc.json. Markdown is markdownlint-cli2's, not Prettier's.",
   "scripts": {
-    "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format": "prettier --write . && markdownlint-cli2 --fix",
+    "format:check": "prettier --check . && markdownlint-cli2",
+    "format:md": "markdownlint-cli2 --fix",
+    "format:md:check": "markdownlint-cli2"
   },
   "devDependencies": {
+    "markdownlint-cli2": "0.23.2",
     "prettier": "3.9.6"
   }
 }

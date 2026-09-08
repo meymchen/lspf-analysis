@@ -6,7 +6,8 @@ This extension bundles the [lspf-analysis](https://github.com/meymchen/lspf-anal
 language server, so nothing else has to be installed — no Rust toolchain, no
 generic LSP client.
 
-Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**, **TypeScript**, **TSX**.
+Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**,
+**TypeScript**, **TSX**.
 
 Everything it displays follows VS Code's own display language: Simplified
 Chinese when the editor is in Simplified Chinese, English otherwise. That
@@ -34,16 +35,16 @@ between worst-first and source order.
 
 Quality blends four pillars, each taking the worst of its metrics:
 
-| Pillar              | What it measures                | Metrics                             |
-| ------------------- | ------------------------------- | ----------------------------------- |
-| **Control flow**    | How tangled the control flow is | cognitive and cyclomatic complexity |
-| **Size**            | How much a function does        | statements (logical lines)          |
+| Pillar | What it measures | Metrics |
+| --- | --- | --- |
+| **Control flow** | How tangled the control flow is | cognitive and cyclomatic complexity |
+| **Size** | How much a function does | statements (logical lines) |
 | **Vocabulary load** | How many names you hold at once | working memory, Halstead difficulty |
-| **Interface**       | How wide the signature is       | parameters                          |
+| **Interface** | How wide the signature is | parameters |
 
 Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25),
 **poor** (<25). The formula, the thresholds and the papers behind each choice
-— including which metrics are deliberately _not_ scored, and why — are in the
+— including which metrics are deliberately *not* scored, and why — are in the
 [project README](https://github.com/meymchen/lspf-analysis#what-it-reports).
 
 ## Settings
@@ -51,23 +52,23 @@ Quality maps to a band: **excellent** (≥80), **good** (≥50), **fair** (≥25
 Every setting lives under `lspfAnalysis` and takes effect immediately, without
 a restart.
 
-| Setting                                           | Default         | Meaning                                    |
-| ------------------------------------------------- | --------------- | ------------------------------------------ |
-| `lspfAnalysis.health.complexityThreshold`         | 15              | Cognitive complexity scoring 50%           |
-| `lspfAnalysis.health.cyclomaticThreshold`         | 10              | Cyclomatic complexity scoring 50%          |
-| `lspfAnalysis.health.lengthThreshold`             | 30              | Statements scoring 50%                     |
-| `lspfAnalysis.health.workingMemoryThreshold`      | 8               | Names held at once scoring 50%             |
-| `lspfAnalysis.health.halsteadDifficultyThreshold` | 12              | Halstead difficulty scoring 50%            |
-| `lspfAnalysis.health.parametersThreshold`         | 4               | Parameters scoring 50%                     |
-| `lspfAnalysis.health.weights.*`                   | 1 / 1 / 1 / 0.5 | Relative pillar weights                    |
-| `lspfAnalysis.health.qualityWarn`                 | 25              | Below this, a function is reported         |
-| `lspfAnalysis.health.qualityError`                | 10              | Below this, it is an error                 |
-| `lspfAnalysis.diagnostics.enabled`                | true            | Publish diagnostics at all                 |
-| `lspfAnalysis.diagnostics.perMetric`              | false           | Also hint at one badly scoring pillar      |
-| `lspfAnalysis.diagnostics.file`                   | false           | Also report the file as a whole            |
-| `lspfAnalysis.statusBar.enabled`                  | true            | Show the file's quality in the status bar  |
-| `lspfAnalysis.server.path`                        | `""`            | Use this binary instead of the bundled one |
-| `lspfAnalysis.trace.server`                       | `off`           | Trace the LSP messages                     |
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `lspfAnalysis.health.complexityThreshold` | 15 | Cognitive complexity scoring 50% |
+| `lspfAnalysis.health.cyclomaticThreshold` | 10 | Cyclomatic complexity scoring 50% |
+| `lspfAnalysis.health.lengthThreshold` | 30 | Statements scoring 50% |
+| `lspfAnalysis.health.workingMemoryThreshold` | 8 | Names held at once scoring 50% |
+| `lspfAnalysis.health.halsteadDifficultyThreshold` | 12 | Halstead difficulty scoring 50% |
+| `lspfAnalysis.health.parametersThreshold` | 4 | Parameters scoring 50% |
+| `lspfAnalysis.health.weights.*` | 1 / 1 / 1 / 0.5 | Relative pillar weights |
+| `lspfAnalysis.health.qualityWarn` | 25 | Below this, a function is reported |
+| `lspfAnalysis.health.qualityError` | 10 | Below this, it is an error |
+| `lspfAnalysis.diagnostics.enabled` | true | Publish diagnostics at all |
+| `lspfAnalysis.diagnostics.perMetric` | false | Also hint at one badly scoring pillar |
+| `lspfAnalysis.diagnostics.file` | false | Also report the file as a whole |
+| `lspfAnalysis.statusBar.enabled` | true | Show the file's quality in the status bar |
+| `lspfAnalysis.server.path` | `""` | Use this binary instead of the bundled one |
+| `lspfAnalysis.trace.server` | `off` | Trace the LSP messages |
 
 ## Commands
 
