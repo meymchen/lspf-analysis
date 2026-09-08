@@ -126,7 +126,7 @@ fn zh_cn(source: &str) -> Option<&'static str> {
         "pillar" => "支柱",
         "metric" => "指标",
         "value" => "数值",
-        "score" => "得分",
+        "grade" => "等级",
         "Weakest: **{0}** — {1} {2} against a threshold of {3}, scoring {4}% ({5})." => {
             "最弱：**{0}** —— {1} {2}，阈值 {3}，得分 {4}%（{5}）。"
         }

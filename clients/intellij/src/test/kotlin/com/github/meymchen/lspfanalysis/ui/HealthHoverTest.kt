@@ -1,8 +1,6 @@
 package com.github.meymchen.lspfanalysis.ui
 
 import com.intellij.testFramework.LightPlatformTestCase
-import javax.swing.JEditorPane
-import javax.swing.text.html.HTMLDocument
 import com.github.meymchen.lspfanalysis.lsp.LspfAnalysisClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspHoverDisabled
 import com.intellij.codeInsight.daemon.LineMarkerInfo
@@ -39,7 +37,7 @@ class HealthHoverTest : LightPlatformTestCase() {
             val native = DocumentationManager.getProviderFromElement(name.parent)
                 .generateDoc(name.parent, name)
             assertTrue(native.orEmpty(), native?.contains(expected) == true)
-            assertTrue(marker.lineMarkerTooltip.orEmpty().contains("100%"))
+            assertTrue(marker.lineMarkerTooltip.orEmpty().contains("33%"))
         }
     }
 
@@ -52,26 +50,28 @@ class HealthHoverTest : LightPlatformTestCase() {
         }
     }
 
-    fun testScoreStaysOnOneLineInNarrowSwingPopup() {
+    /** The server sends bare letters; the colour is the IDE's to choose. */
+    fun testGradeLettersAreColoured() {
         val html = healthHoverHtml(project, MARKDOWN)
-        run {
-            val pane = JEditorPane("text/html", html)
-            pane.setSize(435, 1000)
-            val doc = pane.document as HTMLDocument
-            val text = doc.getText(0, doc.length)
-            val start = text.indexOf("██████████")
-            val end = text.indexOf("100%", start) + 3
-            assertTrue(text, start >= 0 && end > start)
-            assertEquals(html, pane.modelToView2D(start).y, pane.modelToView2D(end).y)
-        }
+        val coloured = Regex("""<span style="color:#([0-9a-f]{6});">([A-D])</span>""")
+            .findAll(html)
+            .map { it.groupValues[2] to it.groupValues[1] }
+            .toList()
+        assertEquals(listOf("A", "D"), coloured.map { it.first })
+        assertEquals(2, coloured.map { it.second }.toSet().size)
+        // The word in the header is not a grade cell, and nor is a value.
+        assertFalse(html, html.contains(""">grade</span>"""))
     }
 
     companion object {
+        /** The shape the server renders, for a client that takes no HTML. */
         private val MARKDOWN = """
-            | pillar | metric | value | score |
-            | :-- | :-- | --: | :-- |
-            | control flow | cognitive complexity | 0 / 15 | ██████████ 100% |
-            |  | cyclomatic complexity | 1 / 10 | ██████████ 99% |
+            **`area`**  ·  quality **33%**  ·  fair
+
+            | grade | pillar | metric | value |
+            | :-: | :-- | :-- | --: |
+            | A | control flow | cognitive complexity | 0 / 15 |
+            | D |  | cyclomatic complexity | 22 / 10 |
         """.trimIndent()
     }
 }
