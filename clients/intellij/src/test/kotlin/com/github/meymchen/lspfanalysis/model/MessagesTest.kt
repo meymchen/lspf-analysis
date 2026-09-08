@@ -1,11 +1,19 @@
 package com.github.meymchen.lspfanalysis.model
 
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MessagesTest {
 
+    /**
+     * The translator is global, and a platform test that runs first boots the
+     * IDE and lets `LspfAnalysisStartup` install one. Clearing it before each
+     * test as well as after makes "with no translator installed" a state this
+     * test establishes rather than one it inherits from whatever ran before.
+     */
+    @Before
     @After
     fun restoreEnglish() {
         Messages.useTranslator(null)

@@ -1,7 +1,7 @@
 //! Rendering a function's or a class's health for hover.
 
 use lspf::PositionEncoding;
-use lspf::types::{Position, Range};
+use lspf::types::{ClientCapabilities, Position, Range};
 use lspf_analysis_core::health::{ClassHealth, FileHealth, FunctionHealth, Grade, Pillar};
 
 use crate::document::declaration_range;
@@ -83,24 +83,80 @@ pub fn class_at<'a>(
         })
 }
 
-/// How many cells a score bar is drawn with.
-const BAR_CELLS: usize = 10;
+/// The letter standing in for a grade in the table's leading column.
+///
+/// A to D rather than the initial of the grade word: the words are
+/// translated and their initials are not, and a reader who has met a letter
+/// grade anywhere already knows which end of the scale A is on.
+fn letter(grade: Grade) -> &'static str {
+    match grade {
+        Grade::Excellent => "A",
+        Grade::Good => "B",
+        Grade::Fair => "C",
+        Grade::Poor => "D",
+    }
+}
 
-/// Draws a 0-100 score as a bar.
+/// The colour a grade's letter is drawn in.
 ///
-/// Block characters rather than an image or a codicon: a hover is Markdown,
-/// and every editor that can show Markdown can show these. A reader scans
-/// the column of bars far faster than a column of numbers.
+/// Fixed hexadecimal, because that is all a client's sanitizer takes: VS
+/// Code matches the `style` attribute against
+/// `^(color:#hex;)?(background-color:#hex;)?$` and drops anything else, so a
+/// theme colour cannot be asked for by name. One palette therefore has to
+/// serve a light theme and a dark one, which these four do by sitting in the
+/// luminance band that clears 3:1 against both white and near-black.
+fn colour(grade: Grade) -> &'static str {
+    match grade {
+        Grade::Excellent => "#2f9e44",
+        Grade::Good => "#5a9216",
+        Grade::Fair => "#c08a00",
+        Grade::Poor => "#d1242f",
+    }
+}
+
+/// Whether the client will render a colour the letter is wrapped in.
 ///
-/// These are never wrapped in a code span. VS Code draws inline code with a
-/// background and horizontal padding, which puts a gap on either side of
-/// every bar and breaks up the column. The two glyphs come from the same
-/// Unicode block, which is designed to tile, so they line up without one.
-fn bar(score: f64) -> String {
-    let filled = ((score / 100.0) * BAR_CELLS as f64)
-        .round()
-        .clamp(0.0, BAR_CELLS as f64) as usize;
-    format!("{}{}", "█".repeat(filled), "░".repeat(BAR_CELLS - filled))
+/// LSP 3.17 has a client list the HTML tags its Markdown renderer keeps, in
+/// `general.markdown.allowedTags`. Only a client that keeps `span` is sent
+/// one: a client that strips the tag would still show the letter, but one
+/// that renders neither would show the markup around it, and a bare letter
+/// is better than that.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Colour {
+    /// The client said it keeps `span`.
+    Spans,
+    /// It said nothing, so letters go out bare.
+    #[default]
+    Bare,
+}
+
+impl Colour {
+    /// Reads what the client said it would keep.
+    pub fn of(capabilities: &ClientCapabilities) -> Self {
+        let allowed = capabilities
+            .general
+            .as_ref()
+            .and_then(|general| general.markdown.as_ref())
+            .and_then(|markdown| markdown.allowed_tags.as_deref())
+            .unwrap_or_default();
+        if allowed.iter().any(|tag| tag.eq_ignore_ascii_case("span")) {
+            Self::Spans
+        } else {
+            Self::Bare
+        }
+    }
+
+    /// Draws one grade for the table's leading cell.
+    fn cell(self, grade: Grade) -> String {
+        match self {
+            Self::Spans => format!(
+                "<span style=\"color:{};\">{}</span>",
+                colour(grade),
+                letter(grade)
+            ),
+            Self::Bare => letter(grade).to_string(),
+        }
+    }
 }
 
 /// Renders a function's numbers as Markdown, in the reader's language.
@@ -109,10 +165,11 @@ fn bar(score: f64) -> String {
 /// both the verdict and the measurement that produced it. The pillar's own
 /// score is the worst of its rows, which is why it is not repeated.
 ///
-/// The Markdown is deliberately portable — no HTML, no editor-specific icon
-/// syntax — because every LSP client renders this. A client that can do
-/// more is free to add to it; the VS Code extension appends its own footer.
-pub fn render(function: &FunctionHealth, locale: Locale) -> String {
+/// Beyond the one `span` the client asked for, the Markdown is portable — no
+/// other HTML, no editor-specific icon syntax — because every LSP client
+/// renders this. A client that can do more is free to add to it; the VS Code
+/// extension appends its own footer.
+pub fn render(function: &FunctionHealth, locale: Locale, colour: Colour) -> String {
     render_pillars(
         function.display_name(),
         function.quality,
@@ -120,11 +177,12 @@ pub fn render(function: &FunctionHealth, locale: Locale) -> String {
         &function.scores.pillars(),
         function.scores.worst_pillar(),
         locale,
+        colour,
     )
 }
 
 /// Renders a class's numbers the same way, from its one pillar.
-pub fn render_class(class: &ClassHealth, locale: Locale) -> String {
+pub fn render_class(class: &ClassHealth, locale: Locale, colour: Colour) -> String {
     let pillar = &class.scores.class_design;
     render_pillars(
         class.display_name(),
@@ -133,11 +191,12 @@ pub fn render_class(class: &ClassHealth, locale: Locale) -> String {
         &[pillar],
         pillar,
         locale,
+        colour,
     )
 }
 
-/// The shared body: a heading, a bar, one table row per measure, and a
-/// sentence naming the measure that set the verdict.
+/// The shared body: a heading, one table row per measure, and a sentence
+/// naming the measure that set the verdict.
 fn render_pillars(
     name: &str,
     quality: f64,
@@ -145,26 +204,27 @@ fn render_pillars(
     pillars: &[&Pillar],
     worst: &Pillar,
     locale: Locale,
+    colour: Colour,
 ) -> String {
+    // No bar under the heading: it drew the percentage standing beside it a
+    // second way and said nothing the letters down the table do not.
     let mut out = format!(
         "**`{name}`**  ·  {quality_label} **{quality:.0}%**  ·  {grade}\n\
          \n\
-         {overall}\n\
-         \n\
-         | {pillar} | {metric} | {value} | {score} |\n\
-         | :-- | :-- | --: | :-- |\n",
+         | {grade_label} | {pillar} | {metric} | {value} |\n\
+         | :-: | :-- | :-- | --: |\n",
         quality_label = locale.t("quality"),
         grade = locale.t(grade.as_str()),
-        overall = bar(quality),
+        grade_label = locale.t("grade"),
         pillar = locale.t("pillar"),
         metric = locale.t("metric"),
         value = locale.t("value"),
-        score = locale.t("score"),
     );
     for pillar in pillars {
         for (index, metric) in pillar.measures.iter().enumerate() {
             out.push_str(&format!(
-                "| {label} | {metric} | {value:.0} / {threshold:.0} | {bar} {score:.0}% |\n",
+                "| {mark} | {label} | {metric} | {value:.0} / {threshold:.0} |\n",
+                mark = colour.cell(Grade::of(metric.score)),
                 // The pillar is named once, on the row of its first metric.
                 label = if index == 0 {
                     locale.t(pillar.name)
@@ -174,8 +234,6 @@ fn render_pillars(
                 metric = locale.t(metric.name),
                 value = metric.value,
                 threshold = metric.threshold,
-                bar = bar(metric.score),
-                score = metric.score,
             ));
         }
     }
@@ -201,6 +259,7 @@ fn render_pillars(
 mod tests {
     use super::*;
     use crate::document::analyze;
+    use lspf::types::{GeneralClientCapabilities, MarkdownClientCapabilities};
     use lspf_analysis_core::LANG;
     use lspf_analysis_core::health::HealthConfig;
     use std::path::Path;
@@ -285,7 +344,7 @@ fn other() -> u32 {
     #[test]
     fn rendering_names_every_pillar_and_metric() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
         for expected in [
             "outer",
             "quality",
@@ -310,7 +369,11 @@ fn other() -> u32 {
     #[test]
     fn a_chinese_reader_gets_the_vocabulary_and_the_sentences() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::SimplifiedChinese);
+        let markdown = render(
+            at(&report, 1, 4).unwrap(),
+            Locale::SimplifiedChinese,
+            Colour::Bare,
+        );
         for expected in [
             "质量",
             "支柱",
@@ -323,6 +386,7 @@ fn other() -> u32 {
             "工作记忆",
             "接口",
             "参数个数",
+            "等级",
             "最弱：",
         ] {
             assert!(
@@ -339,39 +403,115 @@ fn other() -> u32 {
     }
 
     #[test]
-    fn a_bar_fills_in_proportion_to_the_score() {
-        assert_eq!(bar(0.0), "░░░░░░░░░░");
-        assert_eq!(bar(100.0), "██████████");
-        assert_eq!(bar(50.0), "█████░░░░░");
-        // A score can only be in (0, 100], but the bar must not panic on
-        // subtracting past zero if that ever stops being true.
-        assert_eq!(bar(-20.0), "░░░░░░░░░░");
-        assert_eq!(bar(140.0), "██████████");
-        assert_eq!(bar(f64::NAN).chars().count(), BAR_CELLS);
+    fn no_bar_is_drawn_anywhere_in_a_hover() {
+        // A bar per row repeated the percentage beside it and took ten
+        // columns to do it, which is what pushed the table into wrapping;
+        // the one under the heading then said the same as the heading.
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        for cell in ['█', '▉', '▊', '▋', '▌', '▍', '▎', '▏', '░'] {
+            assert!(!markdown.contains(cell), "{cell} drawn in:\n{markdown}");
+        }
     }
 
     #[test]
-    fn a_bar_is_never_wrapped_in_a_code_span() {
-        // VS Code draws inline code with a background and padding, which
-        // would put a gap on either side of every bar.
+    fn the_heading_carries_the_quality_score() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
-        for line in markdown.lines() {
+        let function = at(&report, 1, 4).unwrap();
+        let markdown = render(function, Locale::English, Colour::Bare);
+        let heading = markdown.lines().next().unwrap();
+        assert!(heading.contains("**`outer`**"), "{heading}");
+        assert!(
+            heading.contains(&format!("**{:.0}%**", function.quality)),
+            "{heading}"
+        );
+        // The heading, a blank line, then the table: nothing between them.
+        assert_eq!(markdown.lines().nth(1), Some(""), "{markdown}");
+        assert!(
+            markdown.lines().nth(2).unwrap().starts_with("| "),
+            "{markdown}"
+        );
+    }
+
+    #[test]
+    fn every_row_is_marked_with_the_grade_of_its_metric() {
+        let report = report();
+        let function = at(&report, 1, 4).unwrap();
+        let markdown = render(function, Locale::English, Colour::Bare);
+        let rows: Vec<&str> = markdown
+            .lines()
+            .filter(|line| line.starts_with("| ") && !line.contains(":--"))
+            .collect();
+        // The header, whose leading cell is empty, and one row per measure.
+        let measures: usize = function
+            .scores
+            .pillars()
+            .iter()
+            .map(|p| p.measures.len())
+            .sum();
+        assert_eq!(rows.len(), measures + 1, "{markdown}");
+        for row in &rows[1..] {
+            let leading = row.split('|').nth(1).unwrap().trim();
             assert!(
-                !line.contains("`\u{2588}") && !line.contains("`\u{2591}"),
-                "bar in a code span: {line}"
-            );
-            assert!(
-                !line.contains("\u{2588}`") && !line.contains("\u{2591}`"),
-                "bar in a code span: {line}"
+                ["A", "B", "C", "D"].contains(&leading),
+                "row does not lead with a grade letter: {row}"
             );
         }
     }
 
     #[test]
+    fn a_client_that_keeps_spans_gets_its_letters_coloured() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Spans);
+        assert!(
+            markdown.contains("| <span style=\"color:#2f9e44;\">A</span> | control flow |"),
+            "{markdown}"
+        );
+        // The colour rides on the letter and nowhere else: anything more
+        // would be markup a client that strips the tag turns into nothing.
+        assert_eq!(markdown.matches("<span").count(), 6, "{markdown}");
+        assert_eq!(markdown.matches("</span>").count(), 6, "{markdown}");
+    }
+
+    #[test]
+    fn a_client_that_says_nothing_gets_bare_letters() {
+        let report = report();
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        assert!(markdown.contains("| A | control flow |"), "{markdown}");
+        assert!(
+            !markdown.contains('<'),
+            "a client that renders no HTML must not be shown any:\n{markdown}"
+        );
+    }
+
+    #[test]
+    fn colour_follows_the_tags_the_client_listed() {
+        let with = |tags: Option<Vec<String>>| {
+            Colour::of(&ClientCapabilities {
+                general: Some(GeneralClientCapabilities {
+                    markdown: Some(MarkdownClientCapabilities {
+                        parser: "marked".into(),
+                        version: None,
+                        allowed_tags: tags,
+                    }),
+                    ..GeneralClientCapabilities::default()
+                }),
+                ..ClientCapabilities::default()
+            })
+        };
+        assert_eq!(with(Some(vec!["span".into()])), Colour::Spans);
+        assert_eq!(with(Some(vec!["p".into(), "SPAN".into()])), Colour::Spans);
+        assert_eq!(with(Some(vec!["p".into(), "img".into()])), Colour::Bare);
+        assert_eq!(with(Some(vec![])), Colour::Bare);
+        assert_eq!(with(None), Colour::Bare);
+        // A client that sent no capabilities at all is not offered markup.
+        assert_eq!(Colour::of(&ClientCapabilities::default()), Colour::Bare);
+    }
+
+    #[test]
     fn every_metric_is_shown_against_its_threshold() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
         // The defaults, so a reader can see what a number is judged against.
         assert!(markdown.contains("/ 15"), "{markdown}");
         assert!(markdown.contains("/ 10"), "{markdown}");
@@ -382,7 +522,7 @@ fn other() -> u32 {
     #[test]
     fn the_weakest_pillar_is_called_out_under_the_table() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
         let weakest = markdown
             .lines()
             .find(|line| line.starts_with("Weakest:"))
@@ -394,7 +534,7 @@ fn other() -> u32 {
     #[test]
     fn a_pillar_is_named_once_however_many_metrics_it_has() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
         assert_eq!(
             markdown.matches("| control flow |").count(),
             1,
@@ -449,7 +589,11 @@ fn other() -> u32 {
     #[test]
     fn a_class_renders_its_three_measures() {
         let report = java_report();
-        let markdown = render_class(class_at_position(&report, 1, 13).unwrap(), Locale::English);
+        let markdown = render_class(
+            class_at_position(&report, 1, 13).unwrap(),
+            Locale::English,
+            Colour::Bare,
+        );
         assert!(markdown.contains("**`Box`**"), "{markdown}");
         assert!(
             markdown.contains("| class design | weighted methods |"),

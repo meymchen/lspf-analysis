@@ -16,6 +16,27 @@ export function executableName(platform: NodeJS.Platform): string {
     return platform === 'win32' ? 'lspf-analysis.exe' : 'lspf-analysis';
 }
 
+/**
+ * What the server process is started with, short of the transport flag.
+ *
+ * `--stdio` is deliberately absent: `TransportKind.stdio` has
+ * vscode-languageclient append it to `Executable.args` on the way to `spawn`,
+ * and the server's parser refuses the flag twice — which failed the launch
+ * with `the argument '--stdio' cannot be used multiple times` before the
+ * client had said a word.
+ */
+export const SERVER_ARGS: readonly string[] = ['serve'];
+
+/**
+ * The command line that actually reaches a server spawned over stdio.
+ *
+ * Mirrors what vscode-languageclient adds, so the argv can be checked, and
+ * run against the real binary, without an editor to host the extension.
+ */
+export function stdioArgs(args: readonly string[] = SERVER_ARGS): string[] {
+    return [...args, '--stdio'];
+}
+
 export interface ServerLocation {
     extensionPath: string;
     /** True when running out of an Extension Development Host. */

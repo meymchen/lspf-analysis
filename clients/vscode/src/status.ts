@@ -45,15 +45,31 @@ export interface StatusText {
 /** How many cells a score bar is drawn with. */
 const BAR_CELLS = 10;
 
+/** The partial cells, from one eighth of a cell to seven eighths. */
+const EIGHTHS = ['▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+
 /**
- * Draws a 0-100 score as a bar, the way the server draws them in hovers.
+ * Draws a 0-100 score as a bar, for the status bar's tooltip.
+ *
+ * The partial cells come from the same Unicode block as the full one and are
+ * designed to tile, so ten cells resolve eighty steps without the bar growing
+ * any wider.
  *
  * Never wrapped in a code span: VS Code draws inline code with a background
- * and horizontal padding, which puts a gap on either side of the bar.
+ * and horizontal padding, which would put a gap in the middle of the bar
+ * wherever the span began.
  */
 export function bar(score: number): string {
-    const filled = Math.min(BAR_CELLS, Math.max(0, Math.round((score / 100) * BAR_CELLS)));
-    return '█'.repeat(filled) + '░'.repeat(BAR_CELLS - filled);
+    const cells = BAR_CELLS * 8;
+    // A NaN score draws an empty bar rather than a row of `undefined`.
+    const eighths = Math.min(cells, Math.max(0, Math.round((score / 100) * cells) || 0));
+    const full = Math.floor(eighths / 8);
+    const partial = eighths % 8;
+    return (
+        '█'.repeat(full) +
+        (partial > 0 ? EIGHTHS[partial - 1] : '') +
+        '░'.repeat(BAR_CELLS - full - (partial > 0 ? 1 : 0))
+    );
 }
 
 /** The codicon standing in for each band. */

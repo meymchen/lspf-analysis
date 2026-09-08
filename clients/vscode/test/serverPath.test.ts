@@ -3,10 +3,12 @@ import * as path from 'node:path';
 import test from 'node:test';
 
 import {
+    SERVER_ARGS,
     describeMissingServer,
     executableName,
     expandHome,
     resolveServerBinary,
+    stdioArgs,
 } from '../src/serverPath.js';
 
 test('adds the executable suffix only on Windows', () => {
@@ -108,4 +110,14 @@ test('the missing-server message names the path and the likely cause', () => {
         describeMissingServer({ binary: '/nope', source: 'development' }),
         /cargo build/,
     );
+});
+
+test('the transport flag is contributed once, by the transport', () => {
+    // `TransportKind.stdio` appends `--stdio` to `Executable.args` itself.
+    // Passing it as well made the server refuse to start at all, with
+    // "the argument '--stdio' cannot be used multiple times", which reads
+    // as a broken connection rather than as a bad command line.
+    assert.ok(!SERVER_ARGS.includes('--stdio'), SERVER_ARGS.join(' '));
+    assert.deepEqual(stdioArgs(), ['serve', '--stdio']);
+    assert.equal(stdioArgs().filter((argument) => argument === '--stdio').length, 1);
 });

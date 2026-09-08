@@ -37,6 +37,19 @@ test('a bar fills in proportion to the score', () => {
     assert.equal(bar(150), '██████████');
 });
 
+test('a bar resolves a fraction of a cell', () => {
+    // Eight steps within every cell, so two scores a percent apart do not
+    // draw the same bar.
+    assert.equal(bar(6.25), '▋░░░░░░░░░');
+    assert.equal(bar(55), '█████▌░░░░');
+    assert.notEqual(bar(51), bar(54));
+    // However it divides, a bar is always the same width.
+    for (let step = 0; step <= 200; step += 1) {
+        assert.equal([...bar(step / 2)].length, 10, `bar(${step / 2})`);
+    }
+    assert.equal([...bar(Number.NaN)].length, 10, 'a NaN score still draws a bar');
+});
+
 test('the bar shows the band and the rounded score', () => {
     const rendered = renderStatus(healthy);
     assert.equal(rendered.text, '$(pass) 87%');
@@ -92,8 +105,8 @@ test('no bar is wrapped in a code span', () => {
     // VS Code draws inline code with a background and padding, which would
     // put a gap on either side of every bar.
     const { tooltip } = renderStatus(healthy);
-    assert.doesNotMatch(tooltip, /`[█░▓▒]/, tooltip);
-    assert.doesNotMatch(tooltip, /[█░▓▒]`/, tooltip);
+    assert.doesNotMatch(tooltip, /`[█▉▊▋▌▍▎▏░▓▒]/, tooltip);
+    assert.doesNotMatch(tooltip, /[█▉▊▋▌▍▎▏░▓▒]`/, tooltip);
 });
 
 test('one function is not pluralized', () => {

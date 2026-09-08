@@ -35,7 +35,7 @@ import {
     type Sort,
 } from './functions.js';
 import { t, useTranslator } from './i18n.js';
-import { describeMissingServer, resolveServerBinary } from './serverPath.js';
+import { SERVER_ARGS, describeMissingServer, resolveServerBinary } from './serverPath.js';
 import {
     FILE_HEALTH_METHOD,
     GO_TO_FUNCTION_COMMAND,
@@ -218,10 +218,14 @@ async function goToFunction(uri: string, line: number): Promise<void> {
     editor.revealRange(new Range(position, position));
 }
 
-/** Builds a Markdown string the editor renders with icons and links. */
+/** Builds a Markdown string the editor renders with icons, colour and links. */
 function rich(markdown: string): MarkdownString {
     const rendered = new MarkdownString(markdown, true);
     rendered.isTrusted = { enabledCommands: ENABLED_COMMANDS };
+    // The hover is rebuilt here rather than taken from the client, so the
+    // client's own `supportHtml` never reaches it: without this the `<span>`
+    // the server was told it could send would be stripped back out again.
+    rendered.supportHtml = true;
     return rendered;
 }
 
@@ -292,7 +296,8 @@ function serverOptionsFor(context: ExtensionContext): ServerOptions | undefined 
     }
     return {
         command: resolved.binary,
-        args: ['serve', '--stdio'],
+        // The transport contributes `--stdio`; see SERVER_ARGS.
+        args: [...SERVER_ARGS],
         transport: TransportKind.stdio,
         options: {
             env: {
@@ -322,6 +327,11 @@ async function start(context: ExtensionContext): Promise<void> {
         initializationOptions: { [SECTION]: settingsPayload() },
         outputChannel,
         traceOutputChannel: outputChannel,
+        // Advertises `general.markdown.allowedTags`, which is how the server
+        // learns it may colour a grade letter with a `<span>`. A client that
+        // does not say this gets the letter on its own, so the capability is
+        // the whole of the agreement.
+        markdown: { supportHtml: true },
         middleware: {
             workspace: {
                 // The default push sends the configuration section verbatim,
