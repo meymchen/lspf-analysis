@@ -22,9 +22,7 @@ mk_langs!(
         CppCode,
         CppParser,
         tree_sitter_cpp,
-        [
-            cpp, cc, cxx, cxxm, ccm, cppm, h, hh, hpp, hxx, inl, ipp, tpp
-        ],
+        [cc, cpp, cxx, hpp, hxx, h],
         ["c++"]
     ),
     (
@@ -34,7 +32,7 @@ mk_langs!(
         JavascriptCode,
         JavascriptParser,
         tree_sitter_javascript,
-        [js, jsm, mjs, jsx],
+        [js, mjs, cjs, jsx],
         ["js", "js2"]
     ),
     (
@@ -84,7 +82,7 @@ mk_langs!(
         TypescriptCode,
         TypescriptParser,
         tree_sitter_typescript,
-        [ts, jsw, jsmw],
+        [ts],
         ["typescript"]
     )
 );

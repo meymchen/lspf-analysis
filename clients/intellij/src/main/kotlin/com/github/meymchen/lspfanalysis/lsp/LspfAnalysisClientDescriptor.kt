@@ -37,22 +37,19 @@ const val NOTIFICATION_GROUP: String = "LSPF Analysis"
  * What the server can analyze, keyed by extension, valued by the LSP language
  * id to announce it under.
  *
- * The ids are the ones `language_for` in the server accepts; anything else
- * would start the server for a document it cannot parse. `.mts`, `.cts` and
- * `.cjs` have no entry in the server's own extension table but are announced
- * with an id it knows, which is how the VS Code client covers them too.
+ * Extensions match the upstream grammars' `file-types` declarations and the
+ * server's extension table. The ids are accepted by the server's `language_for`.
  */
 private val LANGUAGE_IDS: Map<String, String> = buildMap {
     put("java", "java")
-    for (extension in listOf("js", "jsm", "mjs", "cjs")) put(extension, "javascript")
+    for (extension in listOf("js", "mjs", "cjs")) put(extension, "javascript")
     put("jsx", "javascriptreact")
     put("py", "python")
     put("rs", "rust")
-    for (extension in listOf("ts", "mts", "cts")) put(extension, "typescript")
+    put("ts", "typescript")
     put("tsx", "typescriptreact")
     for (extension in listOf(
-        "cpp", "cc", "cxx", "cxxm", "ccm", "cppm",
-        "h", "hh", "hpp", "hxx", "inl", "ipp", "tpp",
+        "cc", "cpp", "cxx", "hpp", "hxx", "h",
     )) {
         put(extension, "cpp")
     }

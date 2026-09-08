@@ -236,9 +236,7 @@ mod tests {
     #[test]
     fn cpp_language_and_health_pipeline() {
         assert_eq!(language_for("cpp", Path::new("untitled")), Some(LANG::Cpp));
-        for extension in [
-            "cpp", "cc", "cxx", "hpp", "hxx", "hh", "h", "ipp", "tpp", "inl", "cppm", "ccm", "cxxm",
-        ] {
+        for extension in ["cc", "cpp", "cxx", "hpp", "hxx", "h"] {
             assert_eq!(
                 language_for("plaintext", Path::new(&format!("sample.{extension}"))),
                 Some(LANG::Cpp)

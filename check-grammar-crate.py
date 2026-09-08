@@ -41,13 +41,13 @@ NEW_SUFFIX = "-new"
 
 # Extensions parsed by each tree-sitter-grammar
 EXTENSIONS = {
-    "tree-sitter-cpp": ["*.cpp", "*.cc", "*.cxx", "*.cppm", "*.ccm", "*.cxxm", "*.h", "*.hh", "*.hpp", "*.hxx", "*.inl", "*.ipp", "*.tpp"],
+    "tree-sitter-cpp": ["*.cc", "*.cpp", "*.cxx", "*.hpp", "*.hxx", "*.h"],
     "tree-sitter-tsx": ["*.tsx"],
-    "tree-sitter-typescript": ["*.ts", "*.jsw", "*.jsmw"],
+    "tree-sitter-typescript": ["*.ts"],
     "tree-sitter-rust": ["*.rs"],
     "tree-sitter-java": ["*.java"],
     "tree-sitter-python": ["*.py"],
-    "tree-sitter-javascript": ["*.js", "*.js2", "*.jsm", "*.mjs", "*.jsx"],
+    "tree-sitter-javascript": ["*.js", "*.mjs", "*.cjs", "*.jsx"],
 }
 
 # Run a subprocess.
