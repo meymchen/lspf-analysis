@@ -9,9 +9,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
       ],
-      "outFiles": [
-        "${workspaceFolder}/clients/vscode/dist/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/clients/vscode/dist/**/*.js"],
       "env": {
         "LSPF_ANALYSIS_DEBUG_PORT": null,
         "LSPF_ANALYSIS_DEBUG_TCP": null,
@@ -30,18 +28,12 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/lspf-analysis",
-      "args": [
-        "serve",
-        "--tcp",
-        "127.0.0.1:9257"
-      ],
+      "args": ["serve", "--tcp", "127.0.0.1:9257"],
       "cwd": "${workspaceFolder}",
       "env": {
         "RUST_LOG": "debug"
       },
-      "sourceLanguages": [
-        "rust"
-      ],
+      "sourceLanguages": ["rust"],
       "presentation": {
         "hidden": true
       },
@@ -55,9 +47,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
       ],
-      "outFiles": [
-        "${workspaceFolder}/clients/vscode/dist/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/clients/vscode/dist/**/*.js"],
       "env": {
         "LSPF_ANALYSIS_DEBUG_PORT": "9257",
         "LSPF_ANALYSIS_DEBUG_TRANSPORT": "tcp",
@@ -73,18 +63,12 @@
       "type": "lldb",
       "request": "launch",
       "program": "${workspaceFolder}/target/debug/lspf-analysis",
-      "args": [
-        "serve",
-        "--ws",
-        "127.0.0.1:9258"
-      ],
+      "args": ["serve", "--ws", "127.0.0.1:9258"],
       "cwd": "${workspaceFolder}",
       "env": {
         "RUST_LOG": "debug"
       },
-      "sourceLanguages": [
-        "rust"
-      ],
+      "sourceLanguages": ["rust"],
       "presentation": {
         "hidden": true
       },
@@ -98,9 +82,7 @@
         "--disable-extensions",
         "--extensionDevelopmentPath=${workspaceFolder}/clients/vscode"
       ],
-      "outFiles": [
-        "${workspaceFolder}/clients/vscode/dist/**/*.js"
-      ],
+      "outFiles": ["${workspaceFolder}/clients/vscode/dist/**/*.js"],
       "env": {
         "LSPF_ANALYSIS_DEBUG_PORT": "9258",
         "LSPF_ANALYSIS_DEBUG_TRANSPORT": "ws",
@@ -115,10 +97,7 @@
   "compounds": [
     {
       "name": "tcp",
-      "configurations": [
-        "tcp server",
-        "tcp extension host"
-      ],
+      "configurations": ["tcp server", "tcp extension host"],
       "preLaunchTask": "prepare debug session",
       "stopAll": true,
       "presentation": {
@@ -128,10 +107,7 @@
     },
     {
       "name": "websocket",
-      "configurations": [
-        "websocket server",
-        "websocket extension host"
-      ],
+      "configurations": ["websocket server", "websocket extension host"],
       "preLaunchTask": "prepare debug session",
       "stopAll": true,
       "presentation": {

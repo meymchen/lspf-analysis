@@ -14,8 +14,12 @@ private const val BUNDLE = "messages.LspfAnalysisBundle"
 object LspfAnalysisBundle : DynamicBundle(BUNDLE) {
 
     @Nls
-    fun message(key: @PropertyKey(resourceBundle = BUNDLE) String, vararg params: Any): String =
-        getMessage(key, *params)
+    fun message(
+        key:
+        @PropertyKey(resourceBundle = BUNDLE)
+        String,
+        vararg params: Any,
+    ): String = getMessage(key, *params)
 
     /**
      * The same lookup for a key that is not a literal at the call site.

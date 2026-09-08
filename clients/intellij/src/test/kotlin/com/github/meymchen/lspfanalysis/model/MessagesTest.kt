@@ -1,8 +1,8 @@
 package com.github.meymchen.lspfanalysis.model
 
 import org.junit.After
-import org.junit.Before
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 
 class MessagesTest {

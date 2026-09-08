@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/main/schema/markdownlint-cli2-config-schema.json",
+
+  // Prose written for people. AGENTS.md and docs/ are read by agents, where
+  // reformatting buys nothing and only churns the diff.
+  "globs": ["**/*.md"],
+  "ignores": ["AGENTS.md", "CLAUDE.md", "docs/adr/**", "docs/agents/**"],
+
+  // Honours every .gitignore in the tree, which is what keeps node_modules,
+  // target/ and the downloaded IntelliJ sandbox out.
+  "gitignore": true,
+
+  "config": {
+    "MD060": { "style": "compact" },
+    // Prose is wrapped by hand and stays at 80. A compact table row and a
+    // BibTeX entry cannot be wrapped without breaking them, so neither is
+    // measured.
+    "MD013": { "tables": false, "code_blocks": false },
+  },
+}

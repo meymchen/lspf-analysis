@@ -1,7 +1,7 @@
 # Use a separate pre-commit config that runs only when Rust dependencies
 # are added, removed or modified.
 repos:
--   repo: local
+  - repo: local
     hooks:
       - id: audit
         name: audit
@@ -11,4 +11,4 @@ repos:
         pass_filenames: false
 
 default_language_version:
-    python: python3
+  python: python3

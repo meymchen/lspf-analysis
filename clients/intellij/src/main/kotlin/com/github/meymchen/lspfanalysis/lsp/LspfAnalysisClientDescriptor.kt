@@ -61,8 +61,7 @@ private val LANGUAGE_IDS: Map<String, String> = buildMap {
 /** True when `file` is one this server can analyze. */
 fun isAnalyzable(file: VirtualFile): Boolean = file.extension?.lowercase() in LANGUAGE_IDS
 
-class LspfAnalysisClientDescriptor(project: Project) :
-    ProjectWideLspClientDescriptor(project, "LSPF Analysis") {
+class LspfAnalysisClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "LSPF Analysis") {
 
     // A platform LSP documentation target suppresses the native PSI fallback.
     // Health belongs to a separate gutter tooltip so docstrings remain available.
@@ -124,12 +123,11 @@ class LspfAnalysisClientDescriptor(project: Project) :
      * Today's server only takes the push; this costs nothing and means a later
      * one needs no change here.
      */
-    override fun getWorkspaceConfiguration(item: ConfigurationItem): Any? =
-        if (item.section == SECTION) {
-            settingsPayload(project)
-        } else {
-            super.getWorkspaceConfiguration(item)
-        }
+    override fun getWorkspaceConfiguration(item: ConfigurationItem): Any? = if (item.section == SECTION) {
+        settingsPayload(project)
+    } else {
+        super.getWorkspaceConfiguration(item)
+    }
 
     override val lsp4jServerClass: Class<out Lsp4jServer> = LspfAnalysisLsp4jServer::class.java
 
@@ -157,7 +155,7 @@ class LspfAnalysisClientDescriptor(project: Project) :
             development = isDevelopment(),
             repositoryRoot = repositoryRoot(),
             configuredPath = LspfAnalysisServerSettings.getInstance().state.serverPath,
-        )
+        ),
     )
 
     companion object {
@@ -165,8 +163,7 @@ class LspfAnalysisClientDescriptor(project: Project) :
         fun isDevelopment(): Boolean = System.getProperty("lspfAnalysis.development") == "true"
 
         /** The repository root, which only a sandbox run is told about. */
-        fun repositoryRoot(): Path? =
-            System.getProperty("lspfAnalysis.repositoryRoot")?.let { Paths.get(it) }
+        fun repositoryRoot(): Path? = System.getProperty("lspfAnalysis.repositoryRoot")?.let { Paths.get(it) }
 
         /** The port a TCP debug session is listening on, if there is one. */
         fun debugPort(): Int? = debugServerPort(System.getenv())
@@ -179,10 +176,9 @@ class LspfAnalysisClientDescriptor(project: Project) :
          * the supported way to reach a plugin's own files, and it keeps working
          * if the id is ever changed in one place only.
          */
-        private fun bundledDirectory(): Path? =
-            PluginPathManager
-                .getPluginResource(LspfAnalysisClientDescriptor::class.java, SERVER_DIRECTORY)
-                ?.toPath()
+        private fun bundledDirectory(): Path? = PluginPathManager
+            .getPluginResource(LspfAnalysisClientDescriptor::class.java, SERVER_DIRECTORY)
+            ?.toPath()
     }
 }
 

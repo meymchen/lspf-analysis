@@ -15,17 +15,13 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiNameIdentifierOwner
 
 /** Health tooltips do not participate in documentation target selection. */
-class HealthLineMarkerProvider internal constructor(
-    private val hover: (Project, VirtualFile, Int, Int) -> String?,
-) : LineMarkerProvider {
+class HealthLineMarkerProvider internal constructor(private val hover: (Project, VirtualFile, Int, Int) -> String?) :
+    LineMarkerProvider {
     constructor() : this(LspfAnalysisClient::healthHover)
 
     override fun getLineMarkerInfo(element: PsiElement): LineMarkerInfo<*>? = null
 
-    override fun collectSlowLineMarkers(
-        elements: List<PsiElement>,
-        result: MutableCollection<in LineMarkerInfo<*>>,
-    ) {
+    override fun collectSlowLineMarkers(elements: List<PsiElement>, result: MutableCollection<in LineMarkerInfo<*>>) {
         val project = elements.firstOrNull()?.project ?: return
         if (!LspfAnalysisSettings.getInstance(project).state.gutterIconsEnabled) return
 
@@ -41,13 +37,23 @@ class HealthLineMarkerProvider internal constructor(
             val offset = element.textRange.startOffset
             val line = document.getLineNumber(offset)
             val markdown = hover(
-                element.project, file, line, offset - document.getLineStartOffset(line),
+                element.project,
+                file,
+                line,
+                offset - document.getLineStartOffset(line),
             ) ?: continue
             val html = "<html><body>${healthHoverHtml(element.project, markdown)}</body></html>"
-            result.add(LineMarkerInfo(
-                element, element.textRange, LspfAnalysisIcons.Logo,
-                { html }, null, GutterIconRenderer.Alignment.RIGHT, { "LSPF Analysis" },
-            ))
+            result.add(
+                LineMarkerInfo(
+                    element,
+                    element.textRange,
+                    LspfAnalysisIcons.Logo,
+                    { html },
+                    null,
+                    GutterIconRenderer.Alignment.RIGHT,
+                    { "LSPF Analysis" },
+                ),
+            )
         }
     }
 }

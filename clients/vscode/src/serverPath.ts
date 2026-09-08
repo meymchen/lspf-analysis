@@ -7,13 +7,13 @@ import { t } from './i18n.js';
 export type ServerSource = 'configured' | 'development' | 'bundled';
 
 export interface ResolvedServer {
-    binary: string;
-    source: ServerSource;
+  binary: string;
+  source: ServerSource;
 }
 
 /** The server binary's name, which only Windows spells differently. */
 export function executableName(platform: NodeJS.Platform): string {
-    return platform === 'win32' ? 'lspf-analysis.exe' : 'lspf-analysis';
+  return platform === 'win32' ? 'lspf-analysis.exe' : 'lspf-analysis';
 }
 
 /**
@@ -34,17 +34,17 @@ export const SERVER_ARGS: readonly string[] = ['serve'];
  * run against the real binary, without an editor to host the extension.
  */
 export function stdioArgs(args: readonly string[] = SERVER_ARGS): string[] {
-    return [...args, '--stdio'];
+  return [...args, '--stdio'];
 }
 
 export interface ServerLocation {
-    extensionPath: string;
-    /** True when running out of an Extension Development Host. */
-    development: boolean;
-    /** What `lspfAnalysis.server.path` is set to, if anything. */
-    configuredPath?: string;
-    platform?: NodeJS.Platform;
-    homeDirectory?: string;
+  extensionPath: string;
+  /** True when running out of an Extension Development Host. */
+  development: boolean;
+  /** What `lspfAnalysis.server.path` is set to, if anything. */
+  configuredPath?: string;
+  platform?: NodeJS.Platform;
+  homeDirectory?: string;
 }
 
 /**
@@ -56,37 +56,37 @@ export interface ServerLocation {
  * extension runs the one packaged beside it.
  */
 export function resolveServerBinary({
-    extensionPath,
-    development,
-    configuredPath,
-    platform = process.platform,
-    homeDirectory = os.homedir(),
+  extensionPath,
+  development,
+  configuredPath,
+  platform = process.platform,
+  homeDirectory = os.homedir(),
 }: ServerLocation): ResolvedServer {
-    const configured = configuredPath?.trim();
-    if (configured) {
-        return {
-            binary: path.resolve(expandHome(configured, homeDirectory)),
-            source: 'configured',
-        };
-    }
-    const executable = executableName(platform);
-    return development
-        ? {
-              binary: path.resolve(extensionPath, '..', '..', 'target', 'debug', executable),
-              source: 'development',
-          }
-        : { binary: path.join(extensionPath, 'server', executable), source: 'bundled' };
+  const configured = configuredPath?.trim();
+  if (configured) {
+    return {
+      binary: path.resolve(expandHome(configured, homeDirectory)),
+      source: 'configured',
+    };
+  }
+  const executable = executableName(platform);
+  return development
+    ? {
+        binary: path.resolve(extensionPath, '..', '..', 'target', 'debug', executable),
+        source: 'development',
+      }
+    : { binary: path.join(extensionPath, 'server', executable), source: 'bundled' };
 }
 
 /** Expands a leading `~`, which a hand-written setting is likely to contain. */
 export function expandHome(candidate: string, homeDirectory: string): string {
-    if (candidate === '~') {
-        return homeDirectory;
-    }
-    if (candidate.startsWith('~/') || candidate.startsWith('~\\')) {
-        return path.join(homeDirectory, candidate.slice(2));
-    }
-    return candidate;
+  if (candidate === '~') {
+    return homeDirectory;
+  }
+  if (candidate.startsWith('~/') || candidate.startsWith('~\\')) {
+    return path.join(homeDirectory, candidate.slice(2));
+  }
+  return candidate;
 }
 
 /**
@@ -97,17 +97,17 @@ export function expandHome(candidate: string, homeDirectory: string): string {
  * the file directly; saying so is more useful than reporting a bare path.
  */
 export function describeMissingServer({ binary, source }: ResolvedServer): string {
-    const found = t('LSPF Analysis could not find its language server at {0}.', binary);
-    switch (source) {
-        case 'configured':
-            return `${found} ${t('Check the lspfAnalysis.server.path setting.')}`;
-        case 'development':
-            return `${found} ${t('Run cargo build in the repository first.')}`;
-        case 'bundled':
-            return `${found} ${t(
-                'This usually means the installed extension was built for a different ' +
-                    'platform. Install the build matching this machine, or point ' +
-                    'lspfAnalysis.server.path at an lspf-analysis binary.',
-            )}`;
-    }
+  const found = t('LSPF Analysis could not find its language server at {0}.', binary);
+  switch (source) {
+    case 'configured':
+      return `${found} ${t('Check the lspfAnalysis.server.path setting.')}`;
+    case 'development':
+      return `${found} ${t('Run cargo build in the repository first.')}`;
+    case 'bundled':
+      return `${found} ${t(
+        'This usually means the installed extension was built for a different ' +
+          'platform. Install the build matching this machine, or point ' +
+          'lspfAnalysis.server.path at an lspf-analysis binary.',
+      )}`;
+  }
 }

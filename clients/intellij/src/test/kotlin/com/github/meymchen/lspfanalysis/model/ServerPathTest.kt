@@ -10,18 +10,15 @@ class ServerPathTest {
     private val bundledDirectory = Paths.get("/plugins/lspf-analysis/server")
     private val repositoryRoot = Paths.get("/work/lspf-analysis")
 
-    private fun location(
-        development: Boolean = false,
-        configuredPath: String? = null,
-        osName: String = "Linux",
-    ) = ServerLocation(
-        bundledDirectory = bundledDirectory,
-        development = development,
-        repositoryRoot = repositoryRoot,
-        configuredPath = configuredPath,
-        osName = osName,
-        homeDirectory = "/home/reader",
-    )
+    private fun location(development: Boolean = false, configuredPath: String? = null, osName: String = "Linux") =
+        ServerLocation(
+            bundledDirectory = bundledDirectory,
+            development = development,
+            repositoryRoot = repositoryRoot,
+            configuredPath = configuredPath,
+            osName = osName,
+            homeDirectory = "/home/reader",
+        )
 
     @Test
     fun `only Windows spells the binary differently`() {
@@ -54,7 +51,7 @@ class ServerPathTest {
     @Test
     fun `a configured path wins over both, since someone who set it means it`() {
         val resolved = resolveServerBinary(
-            location(development = true, configuredPath = "/opt/lspf/lspf-analysis")
+            location(development = true, configuredPath = "/opt/lspf/lspf-analysis"),
         )
         assertEquals(ServerSource.CONFIGURED, resolved.source)
         // Absolute, because a relative setting would resolve against whatever

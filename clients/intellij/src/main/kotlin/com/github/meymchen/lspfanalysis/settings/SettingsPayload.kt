@@ -67,5 +67,4 @@ fun settingsPayload(project: Project): JsonObject {
  * `zh-cn` and `en` are the two it has translations for; anything else renders
  * English rather than a guess, which is the server's own rule.
  */
-private fun displayLocale(): String =
-    DynamicBundle.getLocale().toLanguageTag().lowercase()
+private fun displayLocale(): String = DynamicBundle.getLocale().toLanguageTag().lowercase()

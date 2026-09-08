@@ -1,11 +1,14 @@
-import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.RunIdeTask
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
     id("org.jetbrains.intellij.platform")
+    // Formats and checks the Kotlin sources. Everything it applies -- indent,
+    // line length, code style -- comes from the repository's .editorconfig.
+    id("org.jlleitschuh.gradle.ktlint")
 }
 
 /**
@@ -23,7 +26,7 @@ val serverTarget: String = providers.gradleProperty("target").getOrElse("win32-x
 
 val serverTriple: String = serverTargets[serverTarget]
     ?: throw GradleException(
-        "unsupported target $serverTarget; expected one of ${serverTargets.keys.joinToString(", ")}"
+        "unsupported target $serverTarget; expected one of ${serverTargets.keys.joinToString(", ")}",
     )
 
 /** The server binary's name, which only Windows spells differently. */
@@ -82,7 +85,12 @@ kotlin {
  */
 val packaging = gradle.startParameter.taskNames.any {
     it.substringAfterLast(':') in setOf(
-        "buildPlugin", "verifyPlugin", "signPlugin", "publishPlugin", "buildServer", "prepareServer",
+        "buildPlugin",
+        "verifyPlugin",
+        "signPlugin",
+        "publishPlugin",
+        "buildServer",
+        "prepareServer",
     )
 }
 
@@ -119,7 +127,7 @@ val buildServer = tasks.register<Exec>("buildServer") {
                 "no server binary at $binary.\n" +
                     "Install the target with: rustup target add $triple\n" +
                     "A cross build also needs a C toolchain and linker for the target, " +
-                    "because the tree-sitter grammars are C."
+                    "because the tree-sitter grammars are C.",
             )
         }
     }
@@ -167,7 +175,9 @@ val runServerTcp = tasks.register<Exec>("runServerTcp") {
     workingDir = repositoryRoot
     commandLine(
         File(repositoryRoot, "target/debug/$hostExecutable").absolutePath,
-        "serve", "--tcp", address,
+        "serve",
+        "--tcp",
+        address,
     )
     environment("RUST_LOG", level)
 }

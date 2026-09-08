@@ -1,13 +1,13 @@
 package com.github.meymchen.lspfanalysis.ui
 
-import com.intellij.testFramework.LightPlatformTestCase
 import com.github.meymchen.lspfanalysis.lsp.LspfAnalysisClientDescriptor
-import com.intellij.platform.lsp.api.customization.LspHoverDisabled
 import com.intellij.codeInsight.daemon.LineMarkerInfo
 import com.intellij.codeInsight.documentation.DocumentationManager
 import com.intellij.lang.Language
+import com.intellij.platform.lsp.api.customization.LspHoverDisabled
 import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.testFramework.LightPlatformTestCase
 
 class HealthHoverTest : LightPlatformTestCase() {
     fun testAnalysisDoesNotRegisterAnLspDocumentationTarget() {
@@ -23,7 +23,9 @@ class HealthHoverTest : LightPlatformTestCase() {
             }
         """.trimIndent()
         val file = PsiFileFactory.getInstance(project).createFileFromText(
-            "Box.java", Language.findLanguageByID("JAVA")!!, source,
+            "Box.java",
+            Language.findLanguageByID("JAVA")!!,
+            source,
         )
         val provider = HealthLineMarkerProvider { _, _, line, character ->
             val text = source.lines()[line].substring(character)

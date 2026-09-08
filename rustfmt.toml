@@ -1,0 +1,8 @@
+# rustfmt's own defaults, written down because cargo fmt does not read
+# .editorconfig: without this file the two could drift apart silently, and the
+# .editorconfig entry for *.rs claims these exact numbers.
+#
+# Line endings are deliberately left on rustfmt's Auto, since .gitattributes is
+# what decides them.
+max_width = 100
+tab_spaces = 4

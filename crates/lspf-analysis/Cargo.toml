@@ -13,6 +13,9 @@ description = "A language server that reports code health as LSP diagnostics"
 name = "lspf-analysis"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 lspf.workspace = true
 lspf-analysis-core.workspace = true

@@ -22,6 +22,15 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 insta = { version = "1.29.0", features = ["yaml", "json", "redactions"] }
 
+[workspace.lints.rust]
+# The tree-sitter grammar crates' generated parser.c marks each
+# `tree_sitter_<language>` entry point `__declspec(dllexport)`, so every binary
+# linked here exports seven symbols. MSVC's link.exe then announces the import
+# library it creates for them on stdout, and `linker_messages` reports anything
+# the linker writes as a warning. It lands on the binary and on every test
+# executable, and nothing short of patching the grammar crates stops the export.
+linker_messages = "allow"
+
 [profile.dev.package.insta]
 opt-level = 3
 

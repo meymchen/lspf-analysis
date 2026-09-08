@@ -4,6 +4,12 @@ version = "0.0.1"
 authors = ["Calixte Denizet <cdenizet@mozilla.com>"]
 edition = "2024"
 
+# Its own workspace, so it cannot inherit the root's lints. Same reason: the
+# grammar crates export their tree_sitter_* entry points, and MSVC's link.exe
+# reports the import library it creates for them.
+[lints.rust]
+linker_messages = "allow"
+
 [dependencies]
 clap = { version = "^4.0", features = ["derive"] }
 askama = "^0.14"

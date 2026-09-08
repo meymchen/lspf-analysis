@@ -6,7 +6,8 @@ This plugin bundles the [lspf-analysis](https://github.com/meymchen/lspf-analysi
 language server, so nothing else has to be installed — no Rust toolchain, no
 generic LSP client.
 
-Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**, **TypeScript**, **TSX**.
+Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**,
+**TypeScript**, **TSX**.
 
 Everything it displays follows the IDE's own display language: Simplified
 Chinese when the IDE is in Simplified Chinese, English otherwise. That includes

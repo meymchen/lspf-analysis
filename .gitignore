@@ -2,6 +2,10 @@ target
 enums/target
 *~
 
+# The repository's own formatters (Prettier and taplo), which are a development
+# dependency of the tree as a whole rather than of any one client.
+/node_modules/
+
 # What insta writes beside a snapshot when an assertion fails. The `.snap`
 # files themselves are the test baseline and belong in the repository.
 *.snap.new

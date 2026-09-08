@@ -1,19 +1,19 @@
 repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
-    -   id: check-executables-have-shebangs
-    -   id: check-merge-conflict
-    -   id: check-symlinks
-    -   id: check-yaml
-    -   id: check-json
--   repo: local
+      - id: check-executables-have-shebangs
+      - id: check-merge-conflict
+      - id: check-symlinks
+      - id: check-yaml
+      - id: check-json
+  - repo: local
     hooks:
       - id: fmt
         name: fmt (workspace)
         language: system
         files: '\.rs$|(^|/)Cargo\.toml$'
-        exclude: '^enums/'
+        exclude: "^enums/"
         entry: cargo fmt --all -- --check
         pass_filenames: false
 
@@ -22,7 +22,7 @@ repos:
         name: fmt (enums)
         language: system
         files: '^enums/(.*\.rs|Cargo\.toml)$'
-        exclude: '^enums/templates/'
+        exclude: "^enums/templates/"
         entry: cargo fmt --manifest-path enums/Cargo.toml -- --check
         pass_filenames: false
 
@@ -47,5 +47,38 @@ repos:
         entry: cargo test --workspace
         pass_filenames: false
 
+      # Run from the repository root, which covers the clients too: Prettier
+      # resolves each file's .prettierrc.json by walking up from that file.
+      - id: prettier
+        name: prettier
+        language: system
+        files: '\.(html|css|json|ya?ml|[cm]?js|[cm]?ts|tsx)$'
+        entry: npx prettier --check .
+        pass_filenames: false
+
+      # Markdown is markdownlint-cli2's, and only the documents people read.
+      - id: markdownlint
+        name: markdownlint
+        language: system
+        files: '\.md$'
+        entry: npx markdownlint-cli2
+        pass_filenames: false
+
+      - id: ktlint
+        name: ktlint
+        language: system
+        files: '^clients/intellij/.*\.kts?$'
+        entry: bash -c 'cd clients/intellij && ./gradlew --quiet ktlintCheck'
+        pass_filenames: false
+
+      # Needs the native CLI: cargo install taplo-cli --locked. The @taplo/cli
+      # npm build collects no files on Windows.
+      - id: taplo
+        name: taplo
+        language: system
+        files: '\.toml$'
+        entry: taplo format --check
+        pass_filenames: false
+
 default_language_version:
-    python: python3
+  python: python3
