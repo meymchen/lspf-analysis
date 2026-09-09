@@ -1,0 +1,20 @@
+# Node dependencies and caches. Keep package-lock.json under version control.
+node_modules/
+.npm/
+*.tsbuildinfo
+
+# TypeScript/esbuild output and the server copied in by prepareServer.mjs.
+/out/
+/dist/
+/server/
+*.vsix
+
+# Test hosts, coverage, and diagnostic logs.
+.vscode-test/
+coverage/
+.nyc_output/
+*.log
+npm-debug.log*
+
+# Keep shared .vscode settings, tasks, and launch configurations.
+.history/

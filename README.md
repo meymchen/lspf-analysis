@@ -308,6 +308,17 @@ Only Windows x64 ships with a binary today. Elsewhere the plugin works the same,
 but install the server separately and point **Language server path** at it;
 [the plugin's README](./clients/intellij/README.md) has the details.
 
+### Visual Studio
+
+[`clients/vs`](./clients/vs) contains a Windows x64 extension for Visual Studio
+2026 and 2022. Open `lspf-analysis.sln` at the repository root and press F5 to
+build and debug it in an experimental instance. Supported source editors start
+analysis automatically. Diagnostics, hover tables, file health summaries, and
+a sortable function tree use the same server as the other clients. Settings
+include health thresholds and weights, diagnostics, server path, and protocol
+tracing. See [the extension's README](./clients/vs/README.md) for packaging,
+stdio/TCP/WebSocket debugging, and integration tests.
+
 ### The binary on its own
 
 ```console
@@ -577,6 +588,8 @@ before and after the bump.
   the binary for one platform per VSIX.
 - [`clients/intellij`](./clients/intellij) — the IntelliJ IDEA plugin, built on
   the platform's own LSP client and packaged the same way.
+- [`clients/vs`](./clients/vs) — the Visual Studio 2026/2022 extension and its
+  bundled language server.
 - [`enums`](./enums) — the generator for the tree-sitter node kind bindings.
 
 ## Credits
