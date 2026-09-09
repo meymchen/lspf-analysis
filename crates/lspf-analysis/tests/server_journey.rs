@@ -155,6 +155,160 @@ async fn start() -> ServerJourney {
     .unwrap()
 }
 
+fn edit(uri: &Uri, version: i32, text: &str) -> RawMessage {
+    notification(
+        "textDocument/didChange",
+        &DidChangeTextDocumentParams {
+            text_document: VersionedTextDocumentIdentifier {
+                text_document_identifier: TextDocumentIdentifier { uri: uri.clone() },
+                version,
+            },
+            content_changes: vec![
+                TextDocumentContentChangeEvent::TextDocumentContentChangeWholeDocument(
+                    TextDocumentContentChangeWholeDocument { text: text.into() },
+                ),
+            ],
+        },
+    )
+}
+
+async fn no_publication(journey: &mut ServerJourney, milliseconds: u64) {
+    assert!(
+        tokio::time::timeout(Duration::from_millis(milliseconds), journey.peer().recv())
+            .await
+            .is_err(),
+        "an edit must not publish before its quiet period, or after cancellation"
+    );
+}
+
+#[tokio::test]
+async fn edits_debounce_for_500ms_from_the_last_change() {
+    let mut journey = start().await;
+    let uri = uri();
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    diagnostics(&mut journey).await;
+    journey.peer().send(edit(&uri, 2, &tangled())).unwrap();
+    no_publication(&mut journey, 300).await;
+    let last_edit = tokio::time::Instant::now();
+    journey.peer().send(edit(&uri, 3, SIMPLE)).unwrap();
+    no_publication(&mut journey, 300).await;
+    let published = diagnostics(&mut journey).await;
+    assert!(last_edit.elapsed() >= Duration::from_millis(500));
+    assert_eq!(published.version, Some(3));
+    assert!(published.diagnostics.is_empty());
+    no_publication(&mut journey, 550).await;
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn closing_cancels_pending_edit_publication() {
+    let mut journey = start().await;
+    let uri = uri();
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    diagnostics(&mut journey).await;
+    journey.peer().send(edit(&uri, 2, &tangled())).unwrap();
+    no_publication(&mut journey, 100).await;
+    journey
+        .peer()
+        .send(notification(
+            "textDocument/didClose",
+            &DidCloseTextDocumentParams {
+                text_document: TextDocumentIdentifier { uri },
+            },
+        ))
+        .unwrap();
+    assert!(diagnostics(&mut journey).await.diagnostics.is_empty());
+    no_publication(&mut journey, 550).await;
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn saving_flushes_pending_edits_without_a_second_publication() {
+    let mut journey = start().await;
+    let uri = uri();
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    diagnostics(&mut journey).await;
+    journey.peer().send(edit(&uri, 2, &tangled())).unwrap();
+    no_publication(&mut journey, 100).await;
+    journey
+        .peer()
+        .send(notification(
+            "textDocument/didSave",
+            &serde_json::json!({
+                "textDocument": {"uri": uri.as_str()}
+            }),
+        ))
+        .unwrap();
+    let published = tokio::time::timeout(Duration::from_millis(300), diagnostics(&mut journey))
+        .await
+        .unwrap();
+    assert_eq!(published.version, Some(2));
+    assert_eq!(published.diagnostics.len(), 1);
+    no_publication(&mut journey, 550).await;
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn hover_and_panel_requests_wait_for_the_latest_edit() {
+    let mut journey = start().await;
+    let uri = uri();
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    diagnostics(&mut journey).await;
+    journey.peer().send(edit(&uri, 2, &tangled())).unwrap();
+    journey
+        .peer()
+        .send(request(
+            81,
+            "textDocument/hover",
+            &serde_json::json!({
+                "textDocument": {"uri": uri.as_str()}, "position": {"line":0, "character":3}
+            }),
+        ))
+        .unwrap();
+    journey
+        .peer()
+        .send(request(
+            82,
+            "lspfAnalysis/functionHealth",
+            &FunctionHealthParams { uri: uri.clone() },
+        ))
+        .unwrap();
+    no_publication(&mut journey, 200).await;
+    let last_edit = tokio::time::Instant::now();
+    journey
+        .peer()
+        .send(edit(&uri, 3, "fn newest() {}\n"))
+        .unwrap();
+    no_publication(&mut journey, 300).await;
+    let mut responses = 0;
+    let mut published = false;
+    while responses < 2 || !published {
+        let message = tokio::time::timeout(Duration::from_secs(5), journey.peer().recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(last_edit.elapsed() >= Duration::from_millis(500));
+        match message {
+            RawMessage::Response {
+                result: Ok(result), ..
+            } => {
+                assert!(String::from_utf8_lossy(&result).contains("newest"));
+                responses += 1;
+            }
+            RawMessage::Notification { method, params }
+                if method == "textDocument/publishDiagnostics" =>
+            {
+                let diagnostic: PublishDiagnosticsParams = serde_json::from_slice(&params).unwrap();
+                assert_eq!(diagnostic.version, Some(3));
+                published = true;
+            }
+            RawMessage::Notification { .. } => {}
+            other => panic!("unexpected message: {other:?}"),
+        }
+    }
+    journey.finish().await.unwrap();
+}
+
 /// Starts a connection whose `initialize` carried `initializationOptions`.
 async fn start_with_options(options: serde_json::Value) -> ServerJourney {
     let params = InitializeParams {
@@ -177,7 +331,7 @@ fn message(diagnostic: &lspf::types::Diagnostic) -> String {
 }
 
 #[tokio::test]
-async fn opening_an_unhealthy_file_warns_on_the_signature_line() {
+async fn opening_an_unhealthy_file_warns_on_the_function_name() {
     let uri = uri();
     let mut journey = start().await;
     journey.peer().send(open(&uri, &tangled())).unwrap();
@@ -190,11 +344,9 @@ async fn opening_an_unhealthy_file_warns_on_the_signature_line() {
     let diagnostic = &published.diagnostics[0];
     assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::Warning));
     assert_eq!(diagnostic.source.as_deref(), Some("lspf-analysis"));
-    assert_eq!(diagnostic.range.start, Position::new(0, 0));
-    assert_eq!(
-        diagnostic.range.end.line, 0,
-        "the range stays on the signature line"
-    );
+    // `fn tangled(` — the squiggle covers the name, not the whole signature.
+    assert_eq!(diagnostic.range.start, Position::new(0, 3));
+    assert_eq!(diagnostic.range.end, Position::new(0, 10));
     let text = message(diagnostic);
     assert!(text.contains("tangled"), "{text}");
     assert!(text.contains("quality"), "{text}");
@@ -383,7 +535,8 @@ async fn a_wide_java_class_is_diagnosed_and_hovers_its_own_pillar() {
         .iter()
         .find(|d| d.code == Some(Code::String("class-quality".into())))
         .unwrap_or_else(|| panic!("no class diagnostic: {:?}", published.diagnostics));
-    assert_eq!(class.range.start.line, 0, "the `public class` line");
+    assert_eq!(class.range.start, Position::new(0, 13), "`Wide` itself");
+    assert_eq!(class.range.end, Position::new(0, 17));
     assert!(message(class).contains("`Wide`"), "{}", message(class));
 
     // `public class Wide`: the name starts at column 13.

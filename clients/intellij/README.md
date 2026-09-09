@@ -16,10 +16,10 @@ plugin tells it which language you read.
 
 ## Requirements
 
-**2026.2 or later**, any IntelliJ-based IDE. The plugin uses the platform's own
-LSP client, which was open-sourced in 2026.1.4; before that, LSP integration was
-a commercial-IDE extension and a plugin built on it was silently inert in
-Community builds and Android Studio.
+**2026.1.4 or later**, any IntelliJ-based IDE. That is the release which
+open-sourced the platform's LSP client, the one this plugin uses; before it, LSP
+integration was a commercial-IDE extension and a plugin built on it was silently
+inert in Community builds and Android Studio.
 
 Only the Windows x64 build ships with a server binary today. On any other
 platform the plugin works the same, but you have to build the server yourself
@@ -31,7 +31,7 @@ at it.
 Hover the LSPF Analysis icon beside a function or class in the editor gutter to
 see its measurements. Hovering the symbol's name keeps the IDE's original
 documentation available. A function below the quality threshold gets a warning
-on its signature line.
+under its name.
 
 The status bar carries the file as a whole. Its tooltip shows the quality bar
 and how the file's functions are spread across the four bands; clicking it opens
@@ -104,8 +104,8 @@ whichever order the view is not currently in.
 
 ## Building it yourself
 
-From `clients/intellij`, with a JDK 25 (the JetBrains Runtime of any 2026.2 IDE
-will do) and a Rust toolchain on the path:
+From `clients/intellij`, with a JDK 21 — which Gradle downloads itself if you
+have none — and a Rust toolchain on the path:
 
 ```console
 ./gradlew test          # model and IntelliJ integration tests
@@ -129,7 +129,7 @@ matching triple and a C toolchain for it, since the tree-sitter grammars are C.
 ### Debugging the plugin
 
 Choose **Run Plugin** for IntelliJ IDEA or **Run Plugin (PyCharm)** for PyCharm,
-then click Debug. Both run version 2026.2 with the plugin installed and build
+then click Debug. Both run version 2026.1.4 with the plugin installed and build
 the debug language server from this checkout. Gradle downloads the selected IDE
 on first use and keeps each IDE's sandbox separate. Kotlin breakpoints attach
 to the sandbox IDE, and its `idea.log` includes the server's stderr.

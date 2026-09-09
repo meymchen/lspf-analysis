@@ -101,9 +101,9 @@ fn percent_decode(input: &str) -> String {
 
 /// Returns the range covering the content of a 1-based line of `text`.
 ///
-/// A `FuncSpace` records lines, not columns, so a function's diagnostic is
-/// drawn across its signature line: that is where a reader looks to find out
-/// which function is being complained about.
+/// What is left when a range cannot be narrowed to a name: the file-wide
+/// diagnostic, which belongs to no symbol, and an anonymous function, whose
+/// name is not in the source to be pointed at.
 pub fn line_range(text: &str, line: usize, encoding: PositionEncoding) -> Range {
     let content = line_content(text, line).unwrap_or("");
     let line = u32::try_from(line.saturating_sub(1)).unwrap_or(u32::MAX);

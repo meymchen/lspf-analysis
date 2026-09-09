@@ -17,7 +17,7 @@ renders — the extension tells it which language you read.
 ## What it reports
 
 Hovering a function's name shows its measurements; a function below the
-quality threshold gets a diagnostic on its signature line. The hover appears
+quality threshold gets a diagnostic under its name. The hover appears
 on the name and nowhere else, so it adds to what the editor already tells you
 about a symbol instead of displacing it.
 

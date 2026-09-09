@@ -9,9 +9,11 @@
 //! Further analyses are meant to join it here, each contributing its own
 //! diagnostics over the shared document pipeline in [`document`].
 
+mod analysis_cache;
 pub mod config;
 pub mod diagnostics;
 pub mod document;
+mod edit_debounce;
 pub mod formats;
 pub mod functions;
 pub mod hover;
@@ -51,6 +53,8 @@ pub struct State {
     /// What to use when the client configures nothing at all.
     fallback: Settings,
     open: RwLock<HashMap<String, Uri>>,
+    analyses: analysis_cache::AnalysisCache,
+    edits: edit_debounce::EditDebounce,
 }
 
 impl State {
@@ -85,31 +89,48 @@ struct Analyzed {
 }
 
 /// Parses and scores a document off the protocol task.
-async fn report_for(ctx: &ServerContext, uri: &Uri, settings: &Settings) -> Option<Analyzed> {
+async fn report_for(
+    state: &State,
+    ctx: &ServerContext,
+    uri: &Uri,
+    settings: &Settings,
+) -> Option<Arc<Analyzed>> {
+    // Gutter hover and panel requests must not bypass the editing quiet period.
+    state.edits.wait(uri.as_str()).await;
     let document = ctx.documents().get(uri)?;
     let path = uri_to_path(uri);
     let language = language_for(document.language_id(), &path)?;
     let text = document.text();
     let version = document.version();
 
-    let config = settings.health.clone();
-    let source = text.clone();
-    // Parsing is synchronous CPU work; keep it off the protocol task.
-    let report = tokio::task::spawn_blocking(move || analyze(language, source, &path, &config))
+    state
+        .analyses
+        .report(
+            uri.as_str(),
+            language,
+            path,
+            text,
+            version,
+            settings.health.clone(),
+        )
         .await
-        .ok()??;
-    Some(Analyzed {
-        report,
-        text,
-        version,
-    })
 }
 
 /// Scores a document, publishes its diagnostics, and reports the file total.
-async fn publish(ctx: ServerContext, uri: Uri, settings: Settings) {
-    let Some(analyzed) = report_for(&ctx, &uri, &settings).await else {
+async fn publish(state: &State, ctx: ServerContext, uri: Uri, settings: Settings) {
+    let Some(analyzed) = report_for(state, &ctx, &uri, &settings).await else {
         return;
     };
+    // A newer edit, close, or configuration can arrive during CPU work.
+    let Some(current) = ctx.documents().get(&uri) else {
+        return;
+    };
+    if current.version() != analyzed.version
+        || current.text() != analyzed.text
+        || state.settings(&ctx) != settings
+    {
+        return;
+    }
     let encoding = ctx.documents().position_encoding();
     let diagnostics = diagnostics::build(&analyzed.report, &analyzed.text, encoding, &settings);
 
@@ -128,26 +149,48 @@ async fn publish(ctx: ServerContext, uri: Uri, settings: Settings) {
 
 async fn did_open(state: Arc<State>, ctx: ServerContext, params: DidOpenTextDocumentParams) {
     let uri = params.text_document.uri;
+    state.edits.cancel(uri.as_str());
     if let Ok(mut open) = state.open.write() {
         open.insert(uri.as_str().to_string(), uri.clone());
     }
     let settings = state.settings(&ctx);
-    publish(ctx, uri, settings).await;
+    publish(&state, ctx, uri, settings).await;
 }
 
 async fn did_change(state: Arc<State>, ctx: ServerContext, params: DidChangeTextDocumentParams) {
     let uri = params.text_document.text_document_identifier.uri;
-    let settings = state.settings(&ctx);
-    publish(ctx, uri, settings).await;
+    let edit = state.edits.schedule(uri.as_str());
+    let weak = Arc::downgrade(&state);
+    // Return immediately so the protocol can deliver the next edit and reset
+    // this timer. Keep cancellation active through analysis and publication.
+    tokio::spawn(async move {
+        tokio::select! {
+            biased;
+            () = edit.cancelled.cancelled() => {},
+            () = async {
+                tokio::time::sleep_until(edit.deadline).await;
+                if let Some(state) = weak.upgrade() {
+                    let settings = state.settings(&ctx);
+                    publish(&state, ctx, uri.clone(), settings).await;
+                }
+            } => {},
+        }
+        if let Some(state) = weak.upgrade() {
+            state.edits.finish(uri.as_str(), &edit);
+        }
+    });
 }
 
 async fn did_save(state: Arc<State>, ctx: ServerContext, params: DidSaveTextDocumentParams) {
+    state.edits.cancel(params.text_document.uri.as_str());
     let settings = state.settings(&ctx);
-    publish(ctx, params.text_document.uri, settings).await;
+    publish(&state, ctx, params.text_document.uri, settings).await;
 }
 
 async fn did_close(state: Arc<State>, ctx: ServerContext, params: DidCloseTextDocumentParams) {
     let uri = params.text_document.uri;
+    state.edits.cancel(uri.as_str());
+    state.analyses.forget(uri.as_str());
     if let Ok(mut open) = state.open.write() {
         open.remove(uri.as_str());
     }
@@ -181,7 +224,8 @@ async fn did_change_configuration(
         .map(|open| open.values().cloned().collect())
         .unwrap_or_default();
     for uri in open {
-        publish(ctx.clone(), uri, settings.clone()).await;
+        state.edits.cancel(uri.as_str());
+        publish(&state, ctx.clone(), uri, settings.clone()).await;
     }
 }
 
@@ -193,7 +237,7 @@ async fn hover(
 ) -> Result<Option<Hover>, LspError> {
     let uri = params.text_document_position_params.text_document.uri;
     let settings = state.settings(&ctx);
-    let Some(analyzed) = report_for(&ctx, &uri, &settings).await else {
+    let Some(analyzed) = report_for(&state, &ctx, &uri, &settings).await else {
         return Ok(None);
     };
     let encoding = ctx.documents().position_encoding();
@@ -225,10 +269,7 @@ async fn hover(
 
 /// Answers `lspfAnalysis/functionHealth` for one document.
 ///
-/// The document is re-analyzed rather than read from a cache, for the same
-/// reason hover re-analyzes: the server keeps no scored copy, and the text
-/// may have moved on since the last publish. A client asks for this when it
-/// has a view open, not on every keystroke.
+/// Shares the versioned analysis with diagnostics and hover requests.
 async fn function_health(
     state: Arc<State>,
     ctx: ServerContext,
@@ -236,7 +277,7 @@ async fn function_health(
     _ct: CancellationToken,
 ) -> Result<Option<FunctionHealthResult>, LspError> {
     let settings = state.settings(&ctx);
-    let Some(analyzed) = report_for(&ctx, &params.uri, &settings).await else {
+    let Some(analyzed) = report_for(&state, &ctx, &params.uri, &settings).await else {
         return Ok(None);
     };
     Ok(Some(functions::detail(&params.uri, &analyzed.report)))
@@ -252,6 +293,8 @@ pub fn server(file_provider: impl FileProvider, initial: Settings) -> Server<Sta
         configured: RwLock::new(None),
         fallback: initial,
         open: RwLock::new(HashMap::new()),
+        analyses: analysis_cache::AnalysisCache::default(),
+        edits: edit_debounce::EditDebounce::default(),
     };
     Server::builder(state)
         .file_provider(file_provider)

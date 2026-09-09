@@ -26,6 +26,7 @@ class FileHealthService(private val project: Project) {
     fun report(uri: String): FileHealth? = reports[uri]
 
     fun publish(health: FileHealth) {
+        HealthHoverService.getInstance(project).forget(health.uri)
         reports[health.uri] = health
         project.messageBus.syncPublisher(TOPIC).fileHealthChanged(health.uri)
         // The analysis may finish after the editor's first line-marker pass.
@@ -40,6 +41,7 @@ class FileHealthService(private val project: Project) {
 
     /** Drops a closed document's summary, so the status bar stops offering it. */
     fun forget(uri: String) {
+        HealthHoverService.getInstance(project).forget(uri)
         if (reports.remove(uri) != null) {
             project.messageBus.syncPublisher(TOPIC).fileHealthChanged(uri)
         }
@@ -47,6 +49,7 @@ class FileHealthService(private val project: Project) {
 
     /** Forgets everything, for a server that stopped or restarted. */
     fun clear() {
+        HealthHoverService.getInstance(project).clear()
         if (reports.isNotEmpty()) {
             reports.clear()
             project.messageBus.syncPublisher(TOPIC).fileHealthChanged(null)

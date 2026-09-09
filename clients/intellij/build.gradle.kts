@@ -38,7 +38,7 @@ val hostExecutable =
 
 /** The repository root: this build lives two levels below it. */
 val repositoryRoot: File = rootDir.parentFile.parentFile
-val ideVersion = "2026.2"
+val ideVersion = "2026.1.4"
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
@@ -59,9 +59,11 @@ intellijPlatformTesting.runIde.register("runPyCharm") {
 intellijPlatform {
     pluginConfiguration {
         ideaVersion {
-            // 2026.2. The LSP client API was open-sourced in 2026.1.4, which is
-            // what lets this plugin use it outside the commercial IDEs.
-            sinceBuild = "262"
+            // 2026.1.4, the release that open-sourced the LSP client API and so
+            // let this plugin use it outside the commercial IDEs. Spelled as its
+            // build number rather than "261.4", which would also admit every
+            // earlier 2026.1 build -- none of which has com.intellij.modules.lsp.
+            sinceBuild = "261.26222"
             // Left open: nothing here is likely to break on a later platform, and
             // a pinned upper bound would need a release per IDE version.
             untilBuild = provider { null }
@@ -70,9 +72,9 @@ intellijPlatform {
 }
 
 kotlin {
-    jvmToolchain(25)
+    jvmToolchain(21)
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_25
+        jvmTarget = JvmTarget.JVM_21
     }
 }
 

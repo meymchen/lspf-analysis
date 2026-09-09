@@ -14,7 +14,7 @@ Supported languages: **C++**, **Java**, **JavaScript**, **Python**, **Rust**,
 ## What it reports
 
 Hovering a function's name shows its measurements; a function below the
-quality threshold gets a diagnostic on its signature line. The hover answers
+quality threshold gets a diagnostic under its name. The hover answers
 on the name and nowhere else, so it adds to whatever the editor already says
 about a symbol rather than displacing it. A client that would rather draw its
 own list than read one function at a time asks for
@@ -293,8 +293,8 @@ code --install-extension clients/vscode/lspf-analysis-<platform>-<version>.vsix
 
 [`clients/intellij`](./clients/intellij) is the plugin, built on the platform's
 own LSP client, and it carries the server binary the same way. It needs
-**2026.2 or later**: the LSP client API was open-sourced in 2026.1.4, and before
-that a plugin built on it was inert outside the commercial IDEs. Until it is
+**2026.1.4 or later**: that release open-sourced the LSP client API, and before
+it a plugin built on that API was inert outside the commercial IDEs. Until it is
 published, build the ZIP and install it from disk:
 
 ```console
@@ -348,9 +348,8 @@ launches `lspf-analysis serve --stdio` the way it launches any language server,
 for the language ids `java`, `rust`, `python`, `javascript`, `javascriptreact`,
 `typescript` and `typescriptreact`.
 
-Open a source file with a long or deeply nested function; the signature line
-should pick up a warning, and hovering the function name should report its
-four numbers.
+Open a source file with a long or deeply nested function; its name should pick
+up a warning, and hovering that name should report its four numbers.
 
 ### The file summary
 
