@@ -1,11 +1,11 @@
 //! Turning a health report into LSP diagnostics.
 
 use lspf::PositionEncoding;
-use lspf::types::{Code, Diagnostic, DiagnosticSeverity};
+use lspf::types::{Code, Diagnostic, DiagnosticSeverity, Range};
 use lspf_analysis_core::health::{ClassHealth, FileHealth, FunctionHealth, HealthConfig};
 
 use crate::config::Settings;
-use crate::document::{declaration_line, line_range};
+use crate::document::{declaration_range, line_range};
 use crate::i18n::Locale;
 
 /// The `source` every diagnostic this server publishes carries.
@@ -16,15 +16,29 @@ pub const SOURCE: &str = "lspf-analysis";
 /// passed its threshold and kept going.
 const PILLAR_FLOOR: f64 = 50.0;
 
-/// The line a diagnostic about `name` is drawn across.
+/// The range a diagnostic about `name` is drawn under.
 ///
-/// The signature line, not the space's first line: Java's declaration nodes
-/// span their annotations, so an `@Override` would otherwise take the
-/// squiggle that belongs on the signature. A name that cannot be found in
-/// the header — an anonymous function — falls back to the first line, which
-/// is the best that is known about it.
-fn reported_line(text: &str, start_line: usize, end_line: usize, name: &str) -> usize {
-    declaration_line(text, start_line, end_line, name).unwrap_or(start_line)
+/// The declared name, not the whole line: a squiggle under `parse_header`
+/// points at the thing being complained about, where one across the signature
+/// also covers the parameters and the return type — which are not what is
+/// wrong, and which the reader still has to read.
+///
+/// The name is looked for on the signature line rather than the space's first
+/// line, because Java's declaration nodes span their annotations and an
+/// `@Override` would otherwise take the squiggle. A name that cannot be found
+/// in the header — an anonymous function — falls back to the whole first line,
+/// which is the best that is known about it.
+fn reported_range(
+    text: &str,
+    start_line: usize,
+    end_line: usize,
+    name: &str,
+    encoding: PositionEncoding,
+) -> Range {
+    declaration_range(text, start_line, end_line, name, encoding).map_or_else(
+        || line_range(text, start_line, encoding),
+        |(_, range)| range,
+    )
 }
 
 /// Builds the diagnostics for one analyzed file.
@@ -119,14 +133,11 @@ fn quality_diagnostic(
         },
     );
     Diagnostic {
-        range: line_range(
+        range: reported_range(
             text,
-            reported_line(
-                text,
-                function.start_line,
-                function.end_line,
-                function.display_name(),
-            ),
+            function.start_line,
+            function.end_line,
+            function.display_name(),
             encoding,
         ),
         severity: Some(severity),
@@ -169,9 +180,11 @@ fn class_diagnostic(
         .collect::<Vec<_>>()
         .join(locale.t(", "));
     Diagnostic {
-        range: line_range(
+        range: reported_range(
             text,
-            reported_line(text, class.start_line, class.end_line, class.display_name()),
+            class.start_line,
+            class.end_line,
+            class.display_name(),
             encoding,
         ),
         severity: Some(severity),
@@ -221,14 +234,11 @@ fn pillar_diagnostics(
         .flat_map(|pillar| pillar.measures.iter())
         .filter(|metric| metric.score < PILLAR_FLOOR)
         .map(|metric| Diagnostic {
-            range: line_range(
+            range: reported_range(
                 text,
-                reported_line(
-                    text,
-                    function.start_line,
-                    function.end_line,
-                    function.display_name(),
-                ),
+                function.start_line,
+                function.end_line,
+                function.display_name(),
                 encoding,
             ),
             severity: Some(DiagnosticSeverity::Information),
@@ -269,6 +279,7 @@ fn metric_code(metric: &str) -> &'static str {
 mod tests {
     use super::*;
     use crate::document::analyze;
+    use lspf::types::Position;
     use lspf_analysis_core::LANG;
     use std::path::Path;
 
@@ -310,6 +321,27 @@ mod tests {
         build(&report, source, PositionEncoding::Utf16, settings)
     }
 
+    fn js_diagnostics_for(source: &str, settings: &Settings) -> Vec<Diagnostic> {
+        let path = Path::new("a.js");
+        let report = analyze(LANG::Javascript, source.to_string(), path, &settings.health).unwrap();
+        build(&report, source, PositionEncoding::Utf16, settings)
+    }
+
+    /// The same tangle as [`tangled`], with no name to point at: an
+    /// immediately invoked function expression, which the parser reports as
+    /// `<anonymous>`.
+    fn anonymous() -> String {
+        let mut source = String::from("(function () {\n");
+        for index in 0..6 {
+            source.push_str(&format!(
+                "  if (a > {index}) {{ if (b > {index}) {{ \
+                 if (c > {index}) {{ if (d > {index}) {{ t = t + {index}; }} }} }} }}\n"
+            ));
+        }
+        source.push_str("})();\n");
+        source
+    }
+
     /// A class wide enough to fail the class pillar: forty public getters
     /// over forty public fields.
     fn wide_class() -> String {
@@ -337,14 +369,30 @@ mod tests {
     }
 
     #[test]
-    fn a_tangled_function_is_reported_on_its_signature_line() {
+    fn a_tangled_function_is_reported_on_its_name() {
         let diagnostics = diagnostics_for(&tangled(), &Settings::default());
         assert_eq!(diagnostics.len(), 1);
         let diagnostic = &diagnostics[0];
-        assert_eq!(diagnostic.range.start.line, 0);
+        // `fn tangled(` — the name alone, not the signature it sits in.
+        assert_eq!(diagnostic.range.start, Position::new(0, 3));
+        assert_eq!(diagnostic.range.end, Position::new(0, 10));
         assert_eq!(diagnostic.source.as_deref(), Some(SOURCE));
         assert_eq!(diagnostic.code, Some(Code::String("quality".into())));
         assert!(message(diagnostic).contains("tangled"), "{diagnostic:?}");
+    }
+
+    #[test]
+    fn an_anonymous_function_falls_back_to_its_whole_first_line() {
+        // There is no name to underline, so the line it opens on is the most
+        // the reader can be pointed at.
+        let diagnostics = js_diagnostics_for(&anonymous(), &Settings::default());
+        let quality = diagnostics
+            .iter()
+            .find(|d| d.code == Some(Code::String("quality".into())))
+            .unwrap_or_else(|| panic!("no quality diagnostic: {diagnostics:?}"));
+        assert_eq!(quality.range.start, Position::new(0, 0));
+        assert_eq!(quality.range.end, Position::new(0, 14), "`(function () {{`");
+        assert!(message(quality).contains("<anonymous>"), "{quality:?}");
     }
 
     #[test]
@@ -443,14 +491,16 @@ mod tests {
     }
 
     #[test]
-    fn a_wide_java_class_is_reported_on_its_declaration_line() {
+    fn a_wide_java_class_is_reported_on_its_name() {
         let diagnostics = java_diagnostics_for(&wide_class(), &Settings::default());
         let class: Vec<&Diagnostic> = diagnostics
             .iter()
             .filter(|d| d.code == Some(Code::String("class-quality".into())))
             .collect();
         assert_eq!(class.len(), 1, "{diagnostics:?}");
-        assert_eq!(class[0].range.start.line, 0, "the `public class` line");
+        // `public class Wide {` — `Wide`, not the whole declaration.
+        assert_eq!(class[0].range.start, Position::new(0, 13));
+        assert_eq!(class[0].range.end, Position::new(0, 17));
         let text = message(class[0]);
         assert!(text.contains("`Wide`"), "{text}");
         assert!(text.contains("public methods 40"), "{text}");
@@ -465,7 +515,7 @@ mod tests {
     }
 
     #[test]
-    fn an_annotated_declaration_is_reported_on_its_signature_line() {
+    fn an_annotated_declaration_is_reported_on_its_name_not_its_annotation() {
         // Java folds annotations into the declaration node, so the space
         // starts on `@Override`; the squiggle belongs on the signature.
         let mut source = String::from("@Deprecated\npublic class Wide {\n");
@@ -482,8 +532,9 @@ mod tests {
             .find(|d| d.code == Some(Code::String("class-quality".into())))
             .unwrap_or_else(|| panic!("no class diagnostic: {diagnostics:?}"));
         assert_eq!(
-            class.range.start.line, 1,
-            "the `public class Wide` line, not `@Deprecated`"
+            class.range.start,
+            Position::new(1, 13),
+            "`Wide` on the declaration line, not `@Deprecated`"
         );
     }
 

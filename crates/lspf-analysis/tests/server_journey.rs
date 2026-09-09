@@ -331,7 +331,7 @@ fn message(diagnostic: &lspf::types::Diagnostic) -> String {
 }
 
 #[tokio::test]
-async fn opening_an_unhealthy_file_warns_on_the_signature_line() {
+async fn opening_an_unhealthy_file_warns_on_the_function_name() {
     let uri = uri();
     let mut journey = start().await;
     journey.peer().send(open(&uri, &tangled())).unwrap();
@@ -344,11 +344,9 @@ async fn opening_an_unhealthy_file_warns_on_the_signature_line() {
     let diagnostic = &published.diagnostics[0];
     assert_eq!(diagnostic.severity, Some(DiagnosticSeverity::Warning));
     assert_eq!(diagnostic.source.as_deref(), Some("lspf-analysis"));
-    assert_eq!(diagnostic.range.start, Position::new(0, 0));
-    assert_eq!(
-        diagnostic.range.end.line, 0,
-        "the range stays on the signature line"
-    );
+    // `fn tangled(` — the squiggle covers the name, not the whole signature.
+    assert_eq!(diagnostic.range.start, Position::new(0, 3));
+    assert_eq!(diagnostic.range.end, Position::new(0, 10));
     let text = message(diagnostic);
     assert!(text.contains("tangled"), "{text}");
     assert!(text.contains("quality"), "{text}");
@@ -537,7 +535,8 @@ async fn a_wide_java_class_is_diagnosed_and_hovers_its_own_pillar() {
         .iter()
         .find(|d| d.code == Some(Code::String("class-quality".into())))
         .unwrap_or_else(|| panic!("no class diagnostic: {:?}", published.diagnostics));
-    assert_eq!(class.range.start.line, 0, "the `public class` line");
+    assert_eq!(class.range.start, Position::new(0, 13), "`Wide` itself");
+    assert_eq!(class.range.end, Position::new(0, 17));
     assert!(message(class).contains("`Wide`"), "{}", message(class));
 
     // `public class Wide`: the name starts at column 13.

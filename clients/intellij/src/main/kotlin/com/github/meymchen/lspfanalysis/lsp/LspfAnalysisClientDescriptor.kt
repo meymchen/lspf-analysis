@@ -48,9 +48,7 @@ private val LANGUAGE_IDS: Map<String, String> = buildMap {
     put("rs", "rust")
     put("ts", "typescript")
     put("tsx", "typescriptreact")
-    for (extension in listOf(
-        "cc", "cpp", "cxx", "hpp", "hxx", "h",
-    )) {
+    for (extension in listOf("cc", "cpp", "cxx", "hpp", "hxx", "h")) {
         put(extension, "cpp")
     }
 }
