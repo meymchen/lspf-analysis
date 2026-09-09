@@ -290,8 +290,7 @@ async fn hover_and_panel_requests_wait_for_the_latest_edit() {
         assert!(last_edit.elapsed() >= Duration::from_millis(500));
         match message {
             RawMessage::Response {
-                result: Ok(result),
-                ..
+                result: Ok(result), ..
             } => {
                 assert!(String::from_utf8_lossy(&result).contains("newest"));
                 responses += 1;
