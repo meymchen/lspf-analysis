@@ -1,0 +1,21 @@
+# MSBuild output, including the standalone test projects.
+[Bb]in/
+[Oo]bj/
+*.vsix
+
+# Local Visual Studio and debugger state. Keep project and solution files.
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.DotSettings.user
+
+# Test results, coverage, and build logs.
+[Tt]est[Rr]esults/
+*.trx
+*.coverage
+*.coveragexml
+*.binlog
+*.log

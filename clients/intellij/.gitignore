@@ -1,4 +1,21 @@
-.gradle
-.intellijPlatform
-.kotlin
-build
+# Gradle, Kotlin, and IntelliJ Platform plugin caches and build output.
+.gradle/
+.intellijPlatform/
+.kotlin/
+build/
+out/
+
+# Local IDE state. Preserve the repository's shared run/debug configurations.
+.idea/*
+!.idea/runConfigurations/
+*.iml
+*.iws
+*.ipr
+
+# JVM crash reports and local logs.
+hs_err_pid*
+replay_pid*
+*.hprof
+*.log
+
+# Keep gradle/wrapper (including its JAR), gradlew, and gradlew.bat tracked.

@@ -1,0 +1,98 @@
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" />
+  <PropertyGroup>
+    <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">AnyCPU</Platform>
+    <ProjectGuid>{897A459A-5309-49DE-B3AD-C3DA53CCEAF2}</ProjectGuid>
+    <ProjectTypeGuids>{82B43B9B-A64C-4715-B499-D71E9CA2BD60};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <OutputType>Library</OutputType>
+    <RootNamespace>LspfAnalysis</RootNamespace>
+    <AssemblyName>LspfAnalysis</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <LangVersion>latest</LangVersion>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <UseCodebase>true</UseCodebase>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>true</IncludeDebugSymbolsInVSIXContainer>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <VSSDKTargetPlatformRegRootSuffix>Exp</VSSDKTargetPlatformRegRootSuffix>
+    <StartAction>Program</StartAction>
+    <StartProgram>$(VSInstallRoot)\Common7\IDE\devenv.exe</StartProgram>
+    <StartProgram Condition="Exists('$(DevEnvDir)devenv.exe')">$(DevEnvDir)devenv.exe</StartProgram>
+    <StartArguments>/RootSuffix Exp</StartArguments>
+    <StartWorkingDirectory>$(MSBuildProjectDirectory)\..\..</StartWorkingDirectory>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..'))</RepoRoot>
+    <ServerProfile Condition="'$(Configuration)' == 'Release'">release</ServerProfile>
+    <ServerProfile Condition="'$(ServerProfile)' == ''">debug</ServerProfile>
+    <CargoReleaseFlag Condition="'$(Configuration)' == 'Release'">--release</CargoReleaseFlag>
+    <ServerBinary>$(RepoRoot)\target\$(ServerProfile)\lspf-analysis.exe</ServerBinary>
+  </PropertyGroup>
+  <!-- The legacy project system discovers platforms from these conditions. -->
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Release|AnyCPU'">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.ComponentModel.Composition" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System.Xaml" />
+    <Compile Include="AnalysisPackage.cs" />
+    <Compile Include="AnalysisLanguageClient.cs" />
+    <Compile Include="ServerProcess.cs" />
+    <Compile Include="DebugTcpConnection.cs" />
+    <Compile Include="HealthProtocol.cs" />
+    <Compile Include="AnalysisOptions.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="AnalysisSession.cs" />
+    <Compile Include="OptionLabels.cs" />
+    <Compile Include="EditorFeatures.cs" />
+    <Compile Include="HealthToolWindow.cs" />
+    <Compile Include="HealthMargin.cs" />
+    <Compile Include="HealthHoverView.cs" />
+    <Compile Include="ServerTrace.cs" />
+    <Compile Include="DebugWebSocketStream.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <None Include="source.extension.vsixmanifest" />
+    <EmbeddedResource Include="VSPackage.resx" />
+    <EmbeddedResource Include="VSPackage.zh-CN.resx" />
+    <EmbeddedResource Include="VSPackage.zh-TW.resx" />
+    <VSCTCompile Include="Commands.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+    <Content Include="$(ServerBinary)">
+      <Link>server\lspf-analysis.exe</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.0.32112.339" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2142" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.LanguageServer.Client" Version="17.0.5165" ExcludeAssets="runtime" />
+    <!-- Keep the native client's transitive MessagePack dependency on a patched release. -->
+    <PackageReference Include="MessagePack" Version="2.5.302" PrivateAssets="all" />
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" />
+  <Target Name="BuildLanguageServer" BeforeTargets="PrepareForBuild" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="cargo build --locked -p lspf-analysis $(CargoReleaseFlag) --target-dir &quot;$(RepoRoot)\target&quot;" WorkingDirectory="$(RepoRoot)" />
+  </Target>
+</Project>

@@ -10,13 +10,9 @@ enums/target
 # files themselves are the test baseline and belong in the repository.
 *.snap.new
 
-# The VS Code client: dependencies, build output, and the server binary that
-# `npm run package` copies in.
-clients/vscode/node_modules/
-clients/vscode/dist/
-clients/vscode/out/
-clients/vscode/server/
-*.vsix
+# Client-specific dependencies and output are covered by clients/*/.gitignore.
+# Visual Studio state for the solution at the repository root.
+/.vs/
 
 # JetBrains IDEs. Only the run/debug configurations are shared, so a clone on
 # another machine debugs the same way `.vscode/launch.json` lets it. The rest
