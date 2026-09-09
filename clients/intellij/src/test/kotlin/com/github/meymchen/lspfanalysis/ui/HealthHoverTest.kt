@@ -1,5 +1,7 @@
 package com.github.meymchen.lspfanalysis.ui
 
+import com.github.meymchen.lspfanalysis.lsp.HealthHoverCache
+import com.github.meymchen.lspfanalysis.lsp.HealthPosition
 import com.github.meymchen.lspfanalysis.lsp.LspfAnalysisClientDescriptor
 import com.intellij.codeInsight.daemon.LineMarkerInfo
 import com.intellij.codeInsight.documentation.DocumentationManager
@@ -8,8 +10,55 @@ import com.intellij.platform.lsp.api.customization.LspHoverDisabled
 import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.testFramework.LightPlatformTestCase
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 
 class HealthHoverTest : LightPlatformTestCase() {
+    fun testSlowHealthResponseAddsGutterMarkersOnTheRefreshPass() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val source = "class Box { int area() { return 1; } }"
+            val file = PsiFileFactory.getInstance(project).createFileFromText(
+                "Box.java",
+                Language.findLanguageByID("JAVA")!!,
+                source,
+            )
+            val cache = HealthHoverCache(scope)
+            val release = CompletableDeferred<Unit>()
+            val refresh = CompletableDeferred<Unit>()
+            val provider = HealthLineMarkerProvider { _, _, line, character ->
+                cache.get(
+                    "Box.java",
+                    1,
+                    HealthPosition(line, character),
+                    {
+                        release.await()
+                        delay(150)
+                        MARKDOWN
+                    },
+                    { refresh.complete(Unit) },
+                    { throw it },
+                )
+            }
+            val elements = PsiTreeUtil.collectElements(file) { true }.toList()
+            val markers = mutableListOf<LineMarkerInfo<*>>()
+            provider.collectSlowLineMarkers(elements, markers)
+            assertTrue(markers.isEmpty())
+            release.complete(Unit)
+            withTimeout(5000) { refresh.await() }
+            provider.collectSlowLineMarkers(elements, markers)
+            assertEquals(listOf("Box", "area"), markers.map { it.element!!.text })
+        } finally {
+            scope.cancel()
+        }
+    }
+
     fun testAnalysisDoesNotRegisterAnLspDocumentationTarget() {
         assertSame(LspHoverDisabled, LspfAnalysisClientDescriptor(project).lspCustomization.hoverCustomizer)
     }

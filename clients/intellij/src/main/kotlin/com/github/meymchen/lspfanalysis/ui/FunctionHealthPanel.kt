@@ -62,7 +62,7 @@ import javax.swing.tree.TreeSelectionModel
  * character typed. Long enough to cover typing, short enough that the view is
  * never visibly stale.
  */
-private const val REFRESH_DELAY_MS = 300
+private const val REFRESH_DELAY_MS = 1000
 
 /** The coroutine scope the view's requests run on. */
 @Service(Service.Level.PROJECT)
@@ -177,7 +177,10 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
      * documents are dropped there.
      */
     private fun republished(uri: String?) {
-        if (alarm.isEmpty) {
+        SwingUtilities.invokeLater {
+            if (project.isDisposed || alarm.isDisposed) return@invokeLater
+            if (uri != null && uri != activeUri()) return@invokeLater
+            alarm.cancelAllRequests()
             alarm.addRequest({
                 if (uri == null || uri == activeUri()) {
                     fetchActiveDocument()

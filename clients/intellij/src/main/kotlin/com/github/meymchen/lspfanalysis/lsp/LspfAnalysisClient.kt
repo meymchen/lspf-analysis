@@ -23,11 +23,14 @@ import org.eclipse.lsp4j.Position
  */
 object LspfAnalysisClient {
 
-    /** Called only from the background line-marker pass, never from a tooltip callback. */
-    fun healthHover(project: Project, file: VirtualFile, line: Int, character: Int): String? {
+    /** The line-marker pass only reads cached results and schedules missing ones. */
+    fun healthHover(project: Project, file: VirtualFile, line: Int, character: Int): String? =
+        HealthHoverService.getInstance(project).hover(file, line, character)
+
+    internal suspend fun requestHealthHover(project: Project, file: VirtualFile, line: Int, character: Int): String? {
         val client = client(project) ?: return null
         val params = HoverParams(client.getDocumentIdentifier(file), Position(line, character))
-        val hover = client.sendRequestSync(timeoutMs = 50) { it.textDocumentService.hover(params) }
+        val hover = client.sendRequest { it.textDocumentService.hover(params) }
             ?: return null
         return hover.contents?.right?.takeIf { it.kind == MarkupKind.MARKDOWN }?.value
     }
@@ -66,6 +69,7 @@ object LspfAnalysisClient {
      * it would leave the server rendering English from here on.
      */
     fun pushConfiguration(project: Project) {
+        HealthHoverService.getInstance(project).clear()
         val client = client(project) ?: return
         val payload = settingsPayload(project)
         thisLogger().debug("pushing $SECTION configuration")
