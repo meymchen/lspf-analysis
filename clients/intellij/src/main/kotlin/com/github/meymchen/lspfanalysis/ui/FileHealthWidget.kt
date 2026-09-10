@@ -60,8 +60,12 @@ internal class FileHealthWidgetFactory : StatusBarWidgetFactory {
  * because a Swing tooltip cannot be clicked the way the VS Code client's
  * Markdown hover can.
  */
-internal class FileHealthWidget(private val project: Project) :
-    StatusBarWidget,
+internal class FileHealthWidget(
+    private val project: Project,
+    private val documentUri: () -> String? = {
+        FileEditorManager.getInstance(project).selectedEditor?.file?.let { LspfAnalysisClient.fileUri(project, it) }
+    },
+) : StatusBarWidget,
     StatusBarWidget.MultipleTextValuesPresentation {
 
     private var statusBar: StatusBar? = null
@@ -152,8 +156,7 @@ internal class FileHealthWidget(private val project: Project) :
         if (!LspfAnalysisSettings.getInstance(project).state.statusBarEnabled) {
             return null
         }
-        val file = FileEditorManager.getInstance(project).selectedEditor?.file ?: return null
-        val uri = LspfAnalysisClient.fileUri(project, file) ?: return null
+        val uri = documentUri() ?: return null
         return FileHealthService.getInstance(project).report(uri)
     }
 
