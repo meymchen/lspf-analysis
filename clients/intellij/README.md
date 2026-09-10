@@ -44,6 +44,13 @@ to it; expanding one shows the four pillars, and expanding a pillar shows each
 metric against the threshold it is judged by. The toolbar toggles between
 worst-first and source order.
 
+Switching files clears the previous rows and requests the new file immediately.
+Updates to the same file keep the rows visible while waiting for refreshed
+results, with a one-second delay after the last health publication. An empty
+answer clears the rows. A failed request or a ten-second timeout shows
+"Function Health unavailable" until the next refresh. Stopping the server also
+clears the rows; initialization requests the active file again immediately.
+
 Quality blends four pillars, each taking the worst of its metrics:
 
 | Pillar | What it measures | Metrics |
