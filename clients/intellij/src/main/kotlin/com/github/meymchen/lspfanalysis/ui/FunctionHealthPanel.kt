@@ -2,11 +2,14 @@ package com.github.meymchen.lspfanalysis.ui
 
 import com.github.meymchen.lspfanalysis.LspfAnalysisBundle
 import com.github.meymchen.lspfanalysis.LspfAnalysisIcons
+import com.github.meymchen.lspfanalysis.lsp.FileHealthEvent
 import com.github.meymchen.lspfanalysis.lsp.FileHealthService
 import com.github.meymchen.lspfanalysis.lsp.LspfAnalysisClient
 import com.github.meymchen.lspfanalysis.lsp.isAnalyzable
 import com.github.meymchen.lspfanalysis.model.FunctionDetail
 import com.github.meymchen.lspfanalysis.model.FunctionHealth
+import com.github.meymchen.lspfanalysis.model.FunctionHealthSession
+import com.github.meymchen.lspfanalysis.model.FunctionHealthState
 import com.github.meymchen.lspfanalysis.model.Measure
 import com.github.meymchen.lspfanalysis.model.Pillar
 import com.github.meymchen.lspfanalysis.model.functionDescription
@@ -35,34 +38,22 @@ import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.ColoredTreeCellRenderer
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
-import com.intellij.util.Alarm
 import com.intellij.util.ui.tree.TreeUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
-import java.util.concurrent.atomic.AtomicInteger
 import javax.swing.JComponent
 import javax.swing.JTree
 import javax.swing.SwingUtilities
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreeSelectionModel
-
-/**
- * How long to wait before asking again after a republish.
- *
- * The server re-analyzes on every keystroke and announces it with a file
- * summary; refetching the whole breakdown that often would be a request per
- * character typed. Long enough to cover typing, short enough that the view is
- * never visibly stale.
- */
-private const val REFRESH_DELAY_MS = 1000
 
 /** The coroutine scope the view's requests run on. */
 @Service(Service.Level.PROJECT)
@@ -88,8 +79,12 @@ private sealed interface Row {
  * file at once and keeps its own space, which is what makes it worth having
  * alongside.
  */
-internal class FunctionHealthPanel(private val project: Project, parent: Disposable) :
-    SimpleToolWindowPanel(true, true) {
+internal class FunctionHealthPanel(
+    private val project: Project,
+    private val parent: Disposable,
+    load: suspend (String) -> FunctionHealth? = { LspfAnalysisClient.functionHealth(project, it) },
+    private val documentUri: () -> String? = { activeDocumentUri(project) },
+) : SimpleToolWindowPanel(true, true) {
 
     private val root = DefaultMutableTreeNode()
     private val model = DefaultTreeModel(root)
@@ -97,18 +92,14 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
         override fun getToolTipText(event: MouseEvent): String? = rowAt(event)?.let(::tooltipFor)
     }
 
-    private val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD, parent)
-
-    /** The answer on screen, so expanding a row costs no round trip. */
-    private var loaded: FunctionHealth? = null
-
-    /**
-     * Which fetch is current. An answer that arrives after the reader moved to
-     * another file is dropped rather than drawn under its name.
-     */
-    private val generation = AtomicInteger()
+    private val session = FunctionHealthSession(
+        CoroutineScope(FunctionHealthScope.of(project).coroutineContext + Dispatchers.EDT),
+        load,
+        { redraw(it) },
+    )
 
     init {
+        Disposer.register(parent, Disposable { session.close() })
         tree.isRootVisible = false
         tree.showsRootHandles = true
         tree.selectionModel.selectionMode = TreeSelectionModel.SINGLE_TREE_SELECTION
@@ -139,14 +130,29 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
         connection.subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
             object : FileEditorManagerListener {
-                override fun selectionChanged(event: FileEditorManagerEvent) = refreshNow()
+                override fun selectionChanged(event: FileEditorManagerEvent) = onUiThread {
+                    session.select(documentUri())
+                }
             },
         )
-        connection.subscribe(FileHealthService.TOPIC, FileHealthService.Listener { uri -> republished(uri) })
+        connection.subscribe(
+            FileHealthService.TOPIC,
+            FileHealthService.Listener { event ->
+                onUiThread {
+                    when (event) {
+                        is FileHealthEvent.Published -> session.republished(event.uri)
+                        is FileHealthEvent.Removed -> if (event.uri == session.state.uri) session.select(null)
+                        FileHealthEvent.ServerStopped -> session.serverStopped()
+                        FileHealthEvent.ServerInitialized -> session.serverInitialized(documentUri())
+                    }
+                }
+            },
+        )
         // Reordering what is on screen costs no round trip.
         connection.subscribe(FunctionHealthSort.TOPIC, FunctionHealthSort.Listener { redraw() })
 
-        refreshNow()
+        if (!FileHealthService.getInstance(project).serverRunning) session.serverStopped()
+        session.select(documentUri())
     }
 
     private fun buildToolbar(): JComponent {
@@ -160,63 +166,28 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
         return toolbar.component
     }
 
-    /** Redraws now: the document or the configuration changed. */
-    private fun refreshNow() {
-        alarm.cancelAllRequests()
-        fetchActiveDocument()
-    }
-
-    /**
-     * Redraws shortly, coalescing the republishes that arrive while typing.
-     *
-     * What is on screen is left standing until the new answer arrives, so the
-     * rows do not blink empty between keystrokes.
-     *
-     * Called from the connection's own thread, so which document is active is
-     * not asked here: the alarm runs on the EDT, and the republishes for other
-     * documents are dropped there.
-     */
-    private fun republished(uri: String?) {
-        SwingUtilities.invokeLater {
-            if (project.isDisposed || alarm.isDisposed) return@invokeLater
-            if (uri != null && uri != activeUri()) return@invokeLater
-            alarm.cancelAllRequests()
-            alarm.addRequest({
-                if (uri == null || uri == activeUri()) {
-                    fetchActiveDocument()
-                }
-            }, REFRESH_DELAY_MS)
+    /** Connection notifications arrive off the UI thread. */
+    private fun onUiThread(action: () -> Unit) {
+        val guarded = {
+            if (!project.isDisposed && !Disposer.isDisposed(parent)) action()
         }
-    }
-
-    /** Asks the server about whatever document is in front of the reader. */
-    private fun fetchActiveDocument() {
-        val uri = activeUri()
-        if (uri == null) {
-            loaded = null
-            generation.incrementAndGet()
-            redraw()
-            return
-        }
-
-        val fetch = generation.incrementAndGet()
-        FunctionHealthScope.of(project).launch {
-            val health = LspfAnalysisClient.functionHealth(project, uri)
-            withContext(kotlinx.coroutines.Dispatchers.EDT) {
-                if (fetch == generation.get() && health?.uri == uri) {
-                    loaded = health
-                    redraw()
-                }
-            }
-        }
+        if (SwingUtilities.isEventDispatchThread()) guarded() else SwingUtilities.invokeLater(guarded)
     }
 
     /** Rebuilds the rows from what is already loaded, keeping what was open. */
-    private fun redraw() {
+    private fun redraw(presentation: FunctionHealthState = session.state) {
+        if (project.isDisposed || Disposer.isDisposed(parent)) return
         val state = TreeState.createOn(tree, root)
         root.removeAllChildren()
 
-        val health = loaded
+        tree.emptyText.text = LspfAnalysisBundle.message(
+            when {
+                presentation.unavailable -> "toolWindow.unavailable"
+                presentation.uri == null -> "toolWindow.empty"
+                else -> "toolWindow.noResults"
+            },
+        )
+        val health = presentation.health
         if (health != null) {
             val sort = FunctionHealthSort.getInstance(project).sort
             for (detail in sortFunctions(health.functions, sort)) {
@@ -234,15 +205,6 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
 
         model.reload()
         state.applyTo(tree, root)
-    }
-
-    /** The active document's URI, when it is one the server can analyze. */
-    private fun activeUri(): String? {
-        val file = FileEditorManager.getInstance(project).selectedEditor?.file ?: return null
-        if (!isAnalyzable(file)) {
-            return null
-        }
-        return LspfAnalysisClient.fileUri(project, file)
     }
 
     private fun navigateTo(row: Row.Function) {
@@ -264,6 +226,13 @@ internal class FunctionHealthPanel(private val project: Project, parent: Disposa
         // the row itself already says.
         is Row.OfPillar -> null
     }
+}
+
+/** The active document's URI, when it is one the server can analyze. */
+private fun activeDocumentUri(project: Project): String? {
+    val file = FileEditorManager.getInstance(project).selectedEditor?.file ?: return null
+    if (!isAnalyzable(file)) return null
+    return LspfAnalysisClient.fileUri(project, file)
 }
 
 private class RowRenderer : ColoredTreeCellRenderer() {

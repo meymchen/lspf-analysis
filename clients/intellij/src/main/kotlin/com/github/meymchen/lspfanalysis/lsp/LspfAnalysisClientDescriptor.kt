@@ -135,11 +135,11 @@ class LspfAnalysisClientDescriptor(project: Project) : ProjectWideLspClientDescr
         override fun serverInitialized(params: InitializeResult) {
             // A restart re-analyzes everything, so what was on screen belongs to
             // the previous connection until the summaries come back.
-            FileHealthService.getInstance(project).clear()
+            FileHealthService.getInstance(project).serverInitialized()
         }
 
         override fun serverStopped(shutdownNormally: Boolean) {
-            FileHealthService.getInstance(project).clear()
+            FileHealthService.getInstance(project).serverStopped()
         }
     }
 

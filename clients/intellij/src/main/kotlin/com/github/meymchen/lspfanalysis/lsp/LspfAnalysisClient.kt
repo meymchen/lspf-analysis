@@ -48,10 +48,8 @@ object LspfAnalysisClient {
     /**
      * Asks the server for one document's per-function breakdown.
      *
-     * A server that does not know the method answers with an error rather than
-     * a payload -- the language server path setting can point at any build,
-     * including one older than this view -- and so does one that has not
-     * finished starting. Both mean the same thing here: nothing to draw yet.
+     * An empty answer means no report. Request errors propagate so the Function
+     * Health session can distinguish an unavailable server from an empty result.
      */
     suspend fun functionHealth(project: Project, uri: String): FunctionHealth? {
         val client = client(project) ?: return null
