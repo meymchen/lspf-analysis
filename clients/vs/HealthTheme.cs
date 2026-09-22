@@ -27,9 +27,16 @@ namespace LspfAnalysis
         // the pattern, and accepting only six hex digits and a single grade
         // letter, keeps the set of inputs this can act on small enough to
         // reason about exhaustively.
+        // The timeout is belt and braces rather than a fix for a known cost:
+        // the pattern is anchored at both ends and has no nested quantifier to
+        // backtrack through, so it is linear in the length of the cell. But
+        // the cell is derived from a document the reader opened, and a regex
+        // that can run on that should have a bound it cannot exceed however
+        // the pattern is later edited.
         private static readonly Regex GradeSpan = new(
             @"^<span style=""color:#(?<hex>[0-9a-fA-F]{6});"">(?<grade>[A-D])</span>$",
-            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+            RegexOptions.Compiled | RegexOptions.CultureInvariant,
+            TimeSpan.FromMilliseconds(100));
 
         // Reads a leading table cell the server coloured.
         //
@@ -41,7 +48,17 @@ namespace LspfAnalysis
             grade = null;
             color = default;
             if (string.IsNullOrEmpty(cell)) return false;
-            var match = GradeSpan.Match(cell.Trim());
+            Match match;
+            try
+            {
+                match = GradeSpan.Match(cell.Trim());
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // The same answer as any cell this cannot read: draw it as
+                // text. A hover missing one colour beats a hover that threw.
+                return false;
+            }
             if (!match.Success) return false;
             grade = match.Groups["grade"].Value;
             var hex = match.Groups["hex"].Value;

@@ -6,6 +6,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.ui.StartupUiUtil
 import com.intellij.util.ui.UIUtil
 import java.awt.Color
+import java.util.Locale
 
 /** The settings section the server reads, and this plugin's own id for it. */
 const val SECTION: String = "lspfAnalysis"
@@ -85,8 +86,16 @@ private fun displayTheme(): JsonObject = JsonObject().apply {
     addProperty("background", hex(UIUtil.getToolTipBackground()))
 }
 
-/** A colour as the `#rrggbb` the server reads. */
-private fun hex(color: Color): String = String.format("#%02x%02x%02x", color.red, color.green, color.blue)
+/**
+ * A colour as the `#rrggbb` the server reads.
+ *
+ * Formatted against [Locale.ROOT] rather than the IDE's own locale. The
+ * server parses this, so it is a wire value and not display text: a locale
+ * whose digits or letter casing differ would produce a colour the server
+ * reads as nothing, and the letters would silently lose their fitted palette.
+ */
+private fun hex(color: Color): String =
+    String.format(Locale.ROOT, "#%02x%02x%02x", color.red, color.green, color.blue)
 
 /**
  * The IDE's display language as a tag the server understands.
