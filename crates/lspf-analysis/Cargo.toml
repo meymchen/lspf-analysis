@@ -34,3 +34,4 @@ tracing-subscriber.workspace = true
 lspf = { version = "1", default-features = false, features = ["stdio", "testing"] }
 tokio = { version = "1", features = ["macros", "rt", "time"] }
 bytes = "1"
+insta.workspace = true

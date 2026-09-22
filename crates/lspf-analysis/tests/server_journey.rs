@@ -7,8 +7,9 @@ use std::time::Duration;
 use bytes::Bytes;
 use lspf::testing::ServerJourney;
 use lspf::types::{
-    Code, DiagnosticSeverity, DidChangeConfigurationParams, DidChangeTextDocumentParams,
-    DidCloseTextDocumentParams, DidOpenTextDocumentParams, HoverParams, InitializeParams, Position,
+    ClientCapabilities, Code, DiagnosticSeverity, DidChangeConfigurationParams,
+    DidChangeTextDocumentParams, DidCloseTextDocumentParams, DidOpenTextDocumentParams,
+    GeneralClientCapabilities, HoverParams, InitializeParams, MarkdownClientCapabilities, Position,
     PublishDiagnosticsParams, TextDocumentContentChangeEvent,
     TextDocumentContentChangeWholeDocument, TextDocumentIdentifier, TextDocumentItem,
     TextDocumentPositionParams, Uri, VersionedTextDocumentIdentifier, WorkDoneProgressParams,
@@ -321,6 +322,199 @@ async fn start_with_options(options: serde_json::Value) -> ServerJourney {
     )
     .await
     .unwrap()
+}
+
+/// Starts a connection that both lists `span` and reports a theme, which is
+/// what every one of the three IDE clients sends.
+async fn start_with_theme(theme: serde_json::Value) -> ServerJourney {
+    let params = InitializeParams {
+        initialization_options: Some(serde_json::json!({
+            "lspfAnalysis": { "theme": theme }
+        })),
+        capabilities: ClientCapabilities {
+            general: Some(GeneralClientCapabilities {
+                markdown: Some(MarkdownClientCapabilities {
+                    parser: "marked".into(),
+                    version: None,
+                    allowed_tags: Some(vec!["span".into()]),
+                }),
+                ..GeneralClientCapabilities::default()
+            }),
+            ..ClientCapabilities::default()
+        },
+        ..InitializeParams::default()
+    };
+    ServerJourney::start_with(
+        lspf_analysis::server(MemoryFileProvider::new(), Settings::default()),
+        params,
+    )
+    .await
+    .unwrap()
+}
+
+/// Every distinct `color:#hex` a hover's Markdown draws with.
+fn colours(markdown: &str) -> std::collections::BTreeSet<String> {
+    markdown
+        .match_indices("color:#")
+        .map(|(at, _)| markdown[at + 7..at + 13].to_string())
+        .collect()
+}
+
+/// Asks for the hover over the name at `character` and returns the Markdown.
+async fn hover_markdown_at(journey: &mut ServerJourney, uri: &Uri, character: u32) -> String {
+    journey
+        .peer()
+        .send(request(
+            77,
+            "textDocument/hover",
+            &HoverParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position::new(0, character),
+                },
+                work_done_progress_params: WorkDoneProgressParams::default(),
+            },
+        ))
+        .unwrap();
+    let response = journey.peer().recv().await.unwrap();
+    let RawMessage::Response {
+        result: Ok(result), ..
+    } = response
+    else {
+        panic!("expected a successful hover response, got {response:?}");
+    };
+    let value: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    value["contents"]["value"]
+        .as_str()
+        .expect("markdown hover")
+        .to_string()
+}
+
+/// Asks for the hover over `add` and returns the Markdown.
+async fn hover_markdown(journey: &mut ServerJourney, uri: &Uri) -> String {
+    journey
+        .peer()
+        .send(request(
+            77,
+            "textDocument/hover",
+            &HoverParams {
+                text_document_position_params: TextDocumentPositionParams {
+                    text_document: TextDocumentIdentifier { uri: uri.clone() },
+                    position: Position::new(0, 4),
+                },
+                work_done_progress_params: WorkDoneProgressParams::default(),
+            },
+        ))
+        .unwrap();
+    let response = journey.peer().recv().await.unwrap();
+    let RawMessage::Response {
+        result: Ok(result), ..
+    } = response
+    else {
+        panic!("expected a successful hover response, got {response:?}");
+    };
+    let value: serde_json::Value = serde_json::from_slice(&result).unwrap();
+    value["contents"]["value"]
+        .as_str()
+        .expect("markdown hover")
+        .to_string()
+}
+
+#[tokio::test]
+async fn a_light_theme_reported_at_startup_colours_the_letters_for_it() {
+    // The whole chain at once: the theme arrives in `initializationOptions`,
+    // the `span` capability arrives beside it in the same `initialize`, and
+    // the hover that comes back has to carry the light palette. A unit test
+    // cannot catch a settings field that never reaches the hover.
+    let uri = uri();
+    let mut journey = start_with_theme(serde_json::json!({
+        "kind": "light",
+        "background": "#ffffff"
+    }))
+    .await;
+    journey.peer().send(open(&uri, &tangled())).unwrap();
+    diagnostics(&mut journey).await;
+
+    // A function that grades badly on some measures and well on others, so
+    // there is more than one colour to tell apart. A healthy function grades
+    // A on every row, and one colour repeated six times is the right answer
+    // to that hover, not a missing palette.
+    let markdown = hover_markdown_at(&mut journey, &uri, 3).await;
+    assert!(
+        markdown.contains("<span style=\"color:#"),
+        "a client that lists `span` and names a theme must be sent colour:\n{markdown}"
+    );
+    let drawn = colours(&markdown);
+    assert!(
+        drawn.len() > 1,
+        "a function with mixed grades must be drawn in more than one colour: {drawn:?}\n{markdown}"
+    );
+    // Every colour comes from the light palette, fitted to white.
+    let light = ["21883b", "0055cc", "895400", "d70015"];
+    for colour in &drawn {
+        assert!(
+            light.contains(&colour.as_str()),
+            "#{colour} is not in the light palette {light:?}:\n{markdown}"
+        );
+    }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_client_that_declares_its_tags_in_settings_is_coloured_too() {
+    // The exact shape the Visual Studio client sends. Its LSP stack sends
+    // `initialize` itself and offers no hook for shaping capabilities, so it
+    // names its kept tags in `initializationOptions` instead — the one part
+    // of the handshake it does control. This test is the regression guard:
+    // without it the hover came back in plain text, which looks like a dull
+    // theme rather than a missing capability.
+    let uri = uri();
+    let mut journey = start_with_options(serde_json::json!({
+        "lspfAnalysis": {
+            "markdown": { "allowedTags": ["span"] },
+            "theme": { "kind": "light", "background": "#ffffff" }
+        }
+    }))
+    .await;
+    journey.peer().send(open(&uri, &tangled())).unwrap();
+    diagnostics(&mut journey).await;
+
+    let markdown = hover_markdown_at(&mut journey, &uri, 3).await;
+    let drawn = colours(&markdown);
+    assert!(
+        drawn.len() > 1,
+        "a client that declared `span` in its settings must be coloured: {drawn:?}\n{markdown}"
+    );
+    let light = ["21883b", "0055cc", "895400", "d70015"];
+    for colour in &drawn {
+        assert!(light.contains(&colour.as_str()), "#{colour}:\n{markdown}");
+    }
+
+    journey.finish().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_client_that_lists_no_tags_gets_no_colour_however_it_is_themed() {
+    // The failure this pins down: a client whose LSP stack will not let it
+    // set `general.markdown.allowedTags` gets bare letters no matter what
+    // theme it reports, because the capability is what grants the markup.
+    let uri = uri();
+    let mut journey = start_with_options(serde_json::json!({
+        "lspfAnalysis": { "theme": { "kind": "light", "background": "#ffffff" } }
+    }))
+    .await;
+    journey.peer().send(open(&uri, SIMPLE)).unwrap();
+    assert!(diagnostics(&mut journey).await.diagnostics.is_empty());
+
+    let markdown = hover_markdown(&mut journey, &uri).await;
+    assert!(
+        !markdown.contains("<span"),
+        "a client that listed no tags must not be sent markup:\n{markdown}"
+    );
+    assert!(markdown.contains("| A |"), "{markdown}");
+
+    journey.finish().await.unwrap();
 }
 
 fn message(diagnostic: &lspf::types::Diagnostic) -> String {

@@ -595,6 +595,7 @@ dependencies = [
  "bytes",
  "clap",
  "globset",
+ "insta",
  "lspf",
  "lspf-analysis-core",
  "serde",

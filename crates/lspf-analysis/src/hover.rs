@@ -6,6 +6,7 @@ use lspf_analysis_core::health::{ClassHealth, FileHealth, FunctionHealth, Grade,
 
 use crate::document::declaration_range;
 use crate::i18n::Locale;
+use crate::theme::{Palette, Theme};
 
 /// Finds the function whose declared name is under `position`.
 ///
@@ -97,61 +98,71 @@ fn letter(grade: Grade) -> &'static str {
     }
 }
 
-/// The colour a grade's letter is drawn in.
+/// How a grade's letter is drawn, once the client and its theme are known.
 ///
-/// Fixed hexadecimal, because that is all a client's sanitizer takes: VS
-/// Code matches the `style` attribute against
-/// `^(color:#hex;)?(background-color:#hex;)?$` and drops anything else, so a
-/// theme colour cannot be asked for by name. One palette therefore has to
-/// serve a light theme and a dark one, which these four do by sitting in the
-/// luminance band that clears 3:1 against both white and near-black.
-fn colour(grade: Grade) -> &'static str {
-    match grade {
-        Grade::Excellent => "#2f9e44",
-        Grade::Good => "#5a9216",
-        Grade::Fair => "#c08a00",
-        Grade::Poor => "#d1242f",
-    }
-}
-
-/// Whether the client will render a colour the letter is wrapped in.
-///
+/// Two things have to line up before a letter can be coloured, and they
+/// arrive from different places and at different times. Whether the client
+/// renders a `<span>` at all is a capability, settled once at `initialize`:
 /// LSP 3.17 has a client list the HTML tags its Markdown renderer keeps, in
-/// `general.markdown.allowedTags`. Only a client that keeps `span` is sent
-/// one: a client that strips the tag would still show the letter, but one
-/// that renders neither would show the markup around it, and a bare letter
-/// is better than that.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// `general.markdown.allowedTags`, and a client that renders neither the tag
+/// nor its contents would show the markup around the letter, which is worse
+/// than a bare letter. Which colour to use then depends on the theme, which
+/// rides in the settings and changes whenever the reader changes it.
+///
+/// [`Bare`](Self::Bare) is the answer to three separate questions — the
+/// client keeps no spans, the reader is on a high contrast theme, or the
+/// palette could not be built — so the rendering code only ever asks one.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum Colour {
-    /// The client said it keeps `span`.
-    Spans,
-    /// It said nothing, so letters go out bare.
+    /// The client keeps `span`, and this is what to draw with.
+    Spans(Palette),
+    /// Letters go out on their own.
     #[default]
     Bare,
 }
 
 impl Colour {
-    /// Reads what the client said it would keep.
-    pub fn of(capabilities: &ClientCapabilities) -> Self {
-        let allowed = capabilities
+    /// Decides from what the client can render and what it is rendering on.
+    ///
+    /// The client may declare its kept tags in either of two places, and both
+    /// are read: `general.markdown.allowedTags` in its capabilities, which is
+    /// the standard one, and `lspfAnalysis.markdown.allowedTags` in its
+    /// settings, which exists for a client whose LSP stack will not let it
+    /// send the first. They are the same claim, so they are unioned.
+    ///
+    /// A client that reported no theme gets [`Palette::untold`] rather than
+    /// nothing: it can still show a colour, it just cannot be fitted to a
+    /// surface nobody named.
+    pub fn of(
+        capabilities: &ClientCapabilities,
+        declared: Option<&[String]>,
+        theme: Option<&Theme>,
+    ) -> Self {
+        let advertised = capabilities
             .general
             .as_ref()
             .and_then(|general| general.markdown.as_ref())
             .and_then(|markdown| markdown.allowed_tags.as_deref())
             .unwrap_or_default();
-        if allowed.iter().any(|tag| tag.eq_ignore_ascii_case("span")) {
-            Self::Spans
-        } else {
-            Self::Bare
+        let keeps_spans = advertised
+            .iter()
+            .chain(declared.unwrap_or_default())
+            .any(|tag| tag.eq_ignore_ascii_case("span"));
+        if !keeps_spans {
+            return Self::Bare;
+        }
+        match theme {
+            None => Self::Spans(Palette::untold()),
+            Some(theme) => Palette::for_theme(theme).map_or(Self::Bare, Self::Spans),
         }
     }
 
     /// Draws one grade for the table's leading cell.
-    fn cell(self, grade: Grade) -> String {
+    fn cell(&self, grade: Grade) -> String {
         match self {
-            Self::Spans => format!(
+            Self::Spans(palette) => format!(
                 "<span style=\"color:{};\">{}</span>",
-                colour(grade),
+                palette.of(grade).hex(),
                 letter(grade)
             ),
             Self::Bare => letter(grade).to_string(),
@@ -169,7 +180,7 @@ impl Colour {
 /// other HTML, no editor-specific icon syntax — because every LSP client
 /// renders this. A client that can do more is free to add to it; the VS Code
 /// extension appends its own footer.
-pub fn render(function: &FunctionHealth, locale: Locale, colour: Colour) -> String {
+pub fn render(function: &FunctionHealth, locale: Locale, colour: &Colour) -> String {
     render_pillars(
         function.display_name(),
         function.quality,
@@ -182,7 +193,7 @@ pub fn render(function: &FunctionHealth, locale: Locale, colour: Colour) -> Stri
 }
 
 /// Renders a class's numbers the same way, from its one pillar.
-pub fn render_class(class: &ClassHealth, locale: Locale, colour: Colour) -> String {
+pub fn render_class(class: &ClassHealth, locale: Locale, colour: &Colour) -> String {
     let pillar = &class.scores.class_design;
     render_pillars(
         class.display_name(),
@@ -204,7 +215,7 @@ fn render_pillars(
     pillars: &[&Pillar],
     worst: &Pillar,
     locale: Locale,
-    colour: Colour,
+    colour: &Colour,
 ) -> String {
     // No bar under the heading: it drew the percentage standing beside it a
     // second way and said nothing the letters down the table do not.
@@ -259,6 +270,7 @@ fn render_pillars(
 mod tests {
     use super::*;
     use crate::document::analyze;
+    use crate::theme::{Rgb, ThemeKind};
     use lspf::types::{GeneralClientCapabilities, MarkdownClientCapabilities};
     use lspf_analysis_core::LANG;
     use lspf_analysis_core::health::HealthConfig;
@@ -344,7 +356,7 @@ fn other() -> u32 {
     #[test]
     fn rendering_names_every_pillar_and_metric() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         for expected in [
             "outer",
             "quality",
@@ -372,7 +384,7 @@ fn other() -> u32 {
         let markdown = render(
             at(&report, 1, 4).unwrap(),
             Locale::SimplifiedChinese,
-            Colour::Bare,
+            &Colour::Bare,
         );
         for expected in [
             "质量",
@@ -408,7 +420,7 @@ fn other() -> u32 {
         // columns to do it, which is what pushed the table into wrapping;
         // the one under the heading then said the same as the heading.
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         for cell in ['█', '▉', '▊', '▋', '▌', '▍', '▎', '▏', '░'] {
             assert!(!markdown.contains(cell), "{cell} drawn in:\n{markdown}");
         }
@@ -418,7 +430,7 @@ fn other() -> u32 {
     fn the_heading_carries_the_quality_score() {
         let report = report();
         let function = at(&report, 1, 4).unwrap();
-        let markdown = render(function, Locale::English, Colour::Bare);
+        let markdown = render(function, Locale::English, &Colour::Bare);
         let heading = markdown.lines().next().unwrap();
         assert!(heading.contains("**`outer`**"), "{heading}");
         assert!(
@@ -437,7 +449,7 @@ fn other() -> u32 {
     fn every_row_is_marked_with_the_grade_of_its_metric() {
         let report = report();
         let function = at(&report, 1, 4).unwrap();
-        let markdown = render(function, Locale::English, Colour::Bare);
+        let markdown = render(function, Locale::English, &Colour::Bare);
         let rows: Vec<&str> = markdown
             .lines()
             .filter(|line| line.starts_with("| ") && !line.contains(":--"))
@@ -462,7 +474,11 @@ fn other() -> u32 {
     #[test]
     fn a_client_that_keeps_spans_gets_its_letters_coloured() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Spans);
+        let markdown = render(
+            at(&report, 1, 4).unwrap(),
+            Locale::English,
+            &Colour::Spans(Palette::untold()),
+        );
         assert!(
             markdown.contains("| <span style=\"color:#2f9e44;\">A</span> | control flow |"),
             "{markdown}"
@@ -476,7 +492,7 @@ fn other() -> u32 {
     #[test]
     fn a_client_that_says_nothing_gets_bare_letters() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         assert!(markdown.contains("| A | control flow |"), "{markdown}");
         assert!(
             !markdown.contains('<'),
@@ -484,34 +500,135 @@ fn other() -> u32 {
         );
     }
 
+    /// Capabilities listing exactly the tags given.
+    fn listing(tags: Option<Vec<String>>) -> ClientCapabilities {
+        ClientCapabilities {
+            general: Some(GeneralClientCapabilities {
+                markdown: Some(MarkdownClientCapabilities {
+                    parser: "marked".into(),
+                    version: None,
+                    allowed_tags: tags,
+                }),
+                ..GeneralClientCapabilities::default()
+            }),
+            ..ClientCapabilities::default()
+        }
+    }
+
     #[test]
     fn colour_follows_the_tags_the_client_listed() {
-        let with = |tags: Option<Vec<String>>| {
-            Colour::of(&ClientCapabilities {
-                general: Some(GeneralClientCapabilities {
-                    markdown: Some(MarkdownClientCapabilities {
-                        parser: "marked".into(),
-                        version: None,
-                        allowed_tags: tags,
-                    }),
-                    ..GeneralClientCapabilities::default()
-                }),
-                ..ClientCapabilities::default()
-            })
-        };
-        assert_eq!(with(Some(vec!["span".into()])), Colour::Spans);
-        assert_eq!(with(Some(vec!["p".into(), "SPAN".into()])), Colour::Spans);
+        let with = |tags: Option<Vec<String>>| Colour::of(&listing(tags), None, None);
+        let spans = Colour::Spans(Palette::untold());
+        assert_eq!(with(Some(vec!["span".into()])), spans);
+        assert_eq!(with(Some(vec!["p".into(), "SPAN".into()])), spans);
         assert_eq!(with(Some(vec!["p".into(), "img".into()])), Colour::Bare);
         assert_eq!(with(Some(vec![])), Colour::Bare);
         assert_eq!(with(None), Colour::Bare);
         // A client that sent no capabilities at all is not offered markup.
-        assert_eq!(Colour::of(&ClientCapabilities::default()), Colour::Bare);
+        assert_eq!(
+            Colour::of(&ClientCapabilities::default(), None, None),
+            Colour::Bare
+        );
+    }
+
+    #[test]
+    fn a_client_may_declare_its_tags_in_its_settings_instead() {
+        // Visual Studio's LSP stack sends `initialize` itself and offers no
+        // hook for shaping capabilities, so the tag list has to arrive the
+        // other way. Without this it gets bare letters however it is themed.
+        let silent = ClientCapabilities::default();
+        let declared = ["span".to_string()];
+        assert_eq!(
+            Colour::of(&silent, Some(&declared), None),
+            Colour::Spans(Palette::untold())
+        );
+        // The two sources are the same claim: saying it twice says it once.
+        let both = listing(Some(vec!["span".into()]));
+        assert_eq!(
+            Colour::of(&both, Some(&declared), None),
+            Colour::of(&both, None, None)
+        );
+        // And a list that does not name `span` still grants nothing.
+        let other = ["p".to_string(), "img".to_string()];
+        assert_eq!(Colour::of(&silent, Some(&other), None), Colour::Bare);
+        assert_eq!(Colour::of(&silent, Some(&[]), None), Colour::Bare);
+    }
+
+    #[test]
+    fn a_client_that_reported_no_theme_keeps_the_palette_it_always_had() {
+        // Plain LSP clients — nvim, Helix, Emacs — say nothing about their
+        // appearance, and must see exactly what they saw before themes were
+        // ever sent.
+        let spans = listing(Some(vec!["span".into()]));
+        assert_eq!(
+            Colour::of(&spans, None, None),
+            Colour::Spans(Palette::untold()),
+            "a client that named no theme is not fitted to a guess"
+        );
+    }
+
+    #[test]
+    fn a_theme_picks_the_palette_and_high_contrast_picks_none() {
+        let spans = listing(Some(vec!["span".into()]));
+        let themed = |kind| {
+            Colour::of(
+                &spans,
+                None,
+                Some(&Theme {
+                    kind,
+                    background: None,
+                }),
+            )
+        };
+        // A reader who asked not to be told things by hue is told by letter.
+        assert_eq!(themed(ThemeKind::HighContrast), Colour::Bare);
+        // The two ordinary kinds differ from each other and from the palette
+        // sent to a client that named no theme at all.
+        let light = themed(ThemeKind::Light);
+        let dark = themed(ThemeKind::Dark);
+        assert_ne!(light, dark);
+        assert_ne!(light, Colour::Spans(Palette::untold()));
+        assert_ne!(dark, Colour::Spans(Palette::untold()));
+    }
+
+    #[test]
+    fn a_theme_reaches_the_letters_a_hover_draws() {
+        // The end of the wire: a surface the client reported changes the hex
+        // that comes out in the Markdown.
+        let report = report();
+        let spans = listing(Some(vec!["span".into()]));
+        let on = |background| {
+            render(
+                at(&report, 1, 4).unwrap(),
+                Locale::English,
+                &Colour::of(
+                    &spans,
+                    None,
+                    Some(&Theme {
+                        kind: ThemeKind::Dark,
+                        background: Rgb::parse(background),
+                    }),
+                ),
+            )
+        };
+        // The stock dark surface leaves the base green untouched.
+        assert!(
+            on("#1f1f1f").contains("color:#30d158;"),
+            "{}",
+            on("#1f1f1f")
+        );
+        // A surface bright enough to swallow it does not.
+        assert!(
+            !on("#d8d8d8").contains("color:#30d158;"),
+            "{}",
+            on("#d8d8d8")
+        );
     }
 
     #[test]
     fn every_metric_is_shown_against_its_threshold() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         // The defaults, so a reader can see what a number is judged against.
         assert!(markdown.contains("/ 15"), "{markdown}");
         assert!(markdown.contains("/ 10"), "{markdown}");
@@ -522,7 +639,7 @@ fn other() -> u32 {
     #[test]
     fn the_weakest_pillar_is_called_out_under_the_table() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         let weakest = markdown
             .lines()
             .find(|line| line.starts_with("Weakest:"))
@@ -534,7 +651,7 @@ fn other() -> u32 {
     #[test]
     fn a_pillar_is_named_once_however_many_metrics_it_has() {
         let report = report();
-        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, Colour::Bare);
+        let markdown = render(at(&report, 1, 4).unwrap(), Locale::English, &Colour::Bare);
         assert_eq!(
             markdown.matches("| control flow |").count(),
             1,
@@ -592,7 +709,7 @@ fn other() -> u32 {
         let markdown = render_class(
             class_at_position(&report, 1, 13).unwrap(),
             Locale::English,
-            Colour::Bare,
+            &Colour::Bare,
         );
         assert!(markdown.contains("**`Box`**"), "{markdown}");
         assert!(

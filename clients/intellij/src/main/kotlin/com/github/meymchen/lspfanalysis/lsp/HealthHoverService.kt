@@ -1,6 +1,7 @@
 package com.github.meymchen.lspfanalysis.lsp
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.ide.ui.LafManagerListener
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
@@ -24,6 +25,17 @@ internal class HealthHoverService(private val project: Project, scope: Coroutine
                     cache.forget(file.url)
                 }
             },
+        )
+        // The server colours grade letters for the theme it was told about, so
+        // a change of theme has to be pushed and the hovers cached under the
+        // old one dropped. `pushConfiguration` does both, in that order. The
+        // look and feel is an application-wide concern, so this rides the
+        // application bus, scoped to the project so it goes when the project
+        // does. A tooltip already on screen keeps the colours it was drawn
+        // with; the next one is drawn for the new theme.
+        ApplicationManager.getApplication().messageBus.connect(project).subscribe(
+            LafManagerListener.TOPIC,
+            LafManagerListener { LspfAnalysisClient.pushConfiguration(project) },
         )
     }
 

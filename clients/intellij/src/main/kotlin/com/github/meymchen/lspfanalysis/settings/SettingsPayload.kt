@@ -3,6 +3,9 @@ package com.github.meymchen.lspfanalysis.settings
 import com.google.gson.JsonObject
 import com.intellij.DynamicBundle
 import com.intellij.openapi.project.Project
+import com.intellij.util.ui.StartupUiUtil
+import com.intellij.util.ui.UIUtil
+import java.awt.Color
 
 /** The settings section the server reads, and this plugin's own id for it. */
 const val SECTION: String = "lspfAnalysis"
@@ -56,10 +59,34 @@ fun settingsPayload(project: Project): JsonObject {
         add("health", health)
         add("diagnostics", diagnostics)
         addProperty("locale", displayLocale())
+        add("theme", displayTheme())
     }
 
     return JsonObject().apply { add(SECTION, section) }
 }
+
+/**
+ * The appearance the server should colour grade letters for.
+ *
+ * Two things, because the server uses them for two different purposes and so
+ * they can never contradict each other. The `kind` is the intent, which picks
+ * which palette is used. The `background` is the fact -- the colour the
+ * tooltip is actually painted on, which the palette's colours are then fitted
+ * to, so a hand-rolled theme reads as well as a stock one. This plugin can
+ * report both; the VS Code one can only report the kind.
+ *
+ * High contrast is missing, and is the one gap in what this reports: the IDE
+ * has no supported way to ask whether a high contrast theme is on, only
+ * theme-name matching that breaks the first time a theme is renamed. A reader
+ * on one gets the dark palette rather than the uncoloured letters they should.
+ */
+private fun displayTheme(): JsonObject = JsonObject().apply {
+    addProperty("kind", if (StartupUiUtil.isDarkTheme) "dark" else "light")
+    addProperty("background", hex(UIUtil.getToolTipBackground()))
+}
+
+/** A colour as the `#rrggbb` the server reads. */
+private fun hex(color: Color): String = String.format("#%02x%02x%02x", color.red, color.green, color.blue)
 
 /**
  * The IDE's display language as a tag the server understands.
