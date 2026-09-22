@@ -1,0 +1,8 @@
+# Zed dev-extension output. Cargo target/ is covered by the root .gitignore.
+/extension.wasm
+
+# Grammar repositories downloaded by Zed and their compiled WebAssembly files.
+/grammars/
+
+# Keep extension.toml, Cargo.lock, src/, languages/ queries, and .zed/ project
+# configuration available for version control.

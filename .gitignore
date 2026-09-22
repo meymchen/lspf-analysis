@@ -1,6 +1,6 @@
-target
-enums/target
-*~
+# Cargo output at any depth (workspace, enums, and the future Zed client).
+# Keep Cargo.lock files under version control.
+target/
 
 # The repository's own formatters (Prettier and taplo), which are a development
 # dependency of the tree as a whole rather than of any one client.
@@ -11,13 +11,48 @@ enums/target
 *.snap.new
 
 # Client-specific dependencies and output are covered by clients/*/.gitignore.
-# Visual Studio state for the solution at the repository root.
-/.vs/
 
-# JetBrains IDEs. Only the run/debug configurations are shared, so a clone on
-# another machine debugs the same way `.vscode/launch.json` lets it. The rest
-# of `.idea/`, and the module files, describe one local installation and the
-# IDE regenerates them on open.
-.idea/*
-!.idea/runConfigurations/
+# macOS metadata and resource forks.
+.DS_Store
+._*
+.AppleDouble/
+
+# Windows Explorer caches and folder settings.
+[Tt]humbs.db
+[Tt]humbs.db:encryptable
+[Ee]hthumbs.db
+[Ee]hthumbs_vista.db
+[Dd]esktop.ini
+
+# Linux desktop metadata and temporary files on removable/network filesystems.
+.directory
+.Trash-*/
+.fuse_hidden*
+.nfs*
+
+# Editor backups, swap files, and local history at any depth.
+*~
+*.swp
+*.swo
+.history/
+
+# Visual Studio user and debugger state, whether opened at the root or in a
+# client. Keep solution/project files and shared .DotSettings files tracked.
+.vs/
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# JetBrains IDEs at any depth. This repository shares run/debug configurations
+# in .idea/runConfigurations/ and .run/; other .idea state is regenerated.
+**/.idea/*
+!**/.idea/runConfigurations/
 *.iml
+*.iws
+*.ipr
+
+# Keep VS Code .vscode/ and *.code-workspace files, and Zed .zed/ project
+# settings, tasks, and debug configurations available for sharing.
+# Machine-specific preferences belong in user settings or .git/info/exclude.
