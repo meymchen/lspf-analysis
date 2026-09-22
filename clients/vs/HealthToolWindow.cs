@@ -69,7 +69,7 @@ namespace LspfAnalysis
     {
         public HealthToolWindow() : base(null)
         {
-            Caption = Labels.Text("Function Health", "函数健康度");
+            Caption = Labels.Text("Code Health", "代码健康度");
             Content = new HealthPanel();
         }
     }

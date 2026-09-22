@@ -17,8 +17,8 @@ changes. The supported extensions are `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`,
 - Hover over a function or class name to see its health score and metric table.
   This contributes alongside the language's existing Quick Info provider.
 - The editor's bottom margin shows file health, function count, and the number
-  below the warning threshold. Click it to open **Function Health**.
-- **Tools > LSPF Analysis: Function Health** opens a tree of functions, pillars,
+  below the warning threshold. Click it to open **Code Health**.
+- **Tools > LSPF Analysis: Code Health** opens a tree of functions, pillars,
   and measurements. Sort by lowest quality or source position. Double-click a
   function, or press Enter on it, to navigate. The file summary also offers
   shortcuts to the weakest functions, settings, and Error List.
@@ -31,7 +31,7 @@ to local documents already tracked by the extension.
 ## Settings
 
 Open **Tools > Options > LSPF Analysis > General**, or use the Settings button
-in Function Health. Health thresholds, weights, diagnostic options, and
+in Code Health. Health thresholds, weights, diagnostic options, and
 protocol tracing apply to the running server. Changing **Server executable**
 takes effect at the next restart; an empty path uses the bundled binary.
 
@@ -67,8 +67,9 @@ Cargo must be on the PATH inherited by Visual Studio.
    `target/debug/lspf-analysis.exe`, and deploys the extension to the `Exp`
    experimental instance of the Visual Studio version you are using.
 3. Open a supported source file to start analysis. You can also choose
-   **Tools > LSPF Analysis: Start language server**. The command opens **Output** and selects **LSPF Analysis**. The
-   timestamped log shows the executable path, arguments, process ID, and handshake
+   **Tools > LSPF Analysis: Start language server**. The command opens **Output**
+   and selects **LSPF Analysis**. The timestamped log shows the executable path,
+   arguments, process ID, and handshake
    progress. `Language server initialized.` confirms the LSP handshake completed
    and the server is ready. This log comes from Visual Studio's
    `OnServerInitializedAsync` callback.
@@ -212,8 +213,9 @@ option refuses to close an IDE with unsaved documents or an unsaved solution.
 Run the test in each supported Visual Studio version.
 
 Add `-Tcp` or `-WebSocket` to test the corresponding menu against external
-server processes created by the test. These processes are cleaned up by the test, not by the extension. If the
-experimental instance uses a custom debug port, also pass `-TcpPort <port>`.
+server processes created by the test. These processes are cleaned up by the test,
+not by the extension. If the experimental instance uses a custom debug port,
+also pass `-TcpPort <port>`.
 With either network mode and `-VerifyIdeExit`, the final IDE-exit check uses
 stdio and also verifies switching back from the network transport. To test an
 isolated registry hive, build with `/p:VSSDKTargetPlatformRegRootSuffix=LspfParity`,

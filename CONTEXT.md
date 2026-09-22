@@ -1,13 +1,24 @@
 # lspf-analysis
 
-Code health analysis for source files and their functions.
+Code health analysis for source files, functions, and classes.
 
 ## Language
 
+**Code Health**:
+The assessment of source code through measurements, quality scores, and grades,
+covering functions, classes, and source files.
+_Avoid_: Function Health (only the function-specific assessment), Code Metrics
+(measurements without the assessment).
+
 **Function Health**:
-The per-function breakdown for one source document, including each function's
-quality score, pillars, and measurements.
+The function-specific part of Code Health: each function's quality score,
+pillars, and measurements.
 _Avoid_: File health (the document-wide summary).
+
+**Class Health**:
+The class-specific part of Code Health: each scored class or interface's quality
+score, class-design pillar, and measurements.
+_Avoid_: Function Health (functions have their own assessment).
 
 **Grade**:
 The band a quality score falls in, named by the letter A to D. The letter is

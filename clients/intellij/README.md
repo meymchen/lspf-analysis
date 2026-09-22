@@ -1,6 +1,6 @@
 # LSPF Analysis for IntelliJ IDEA
 
-Tells you, while you type, which functions are getting hard to work with.
+Code health analysis for functions and classes, updated while you type.
 
 This plugin bundles the [lspf-analysis](https://github.com/meymchen/lspf-analysis)
 language server, so nothing else has to be installed — no Rust toolchain, no
@@ -38,7 +38,7 @@ and how the file's functions are spread across the four bands; clicking it opens
 the ones worth opening first — each a row that jumps to the line, alongside
 shortcuts to the Problems view, the settings, and a server restart.
 
-**Function Health**, on the right, lists every function of the file at once,
+**Code Health**, on the right, lists every function of the file at once,
 worst first, rather than one at a time under the pointer. Clicking a row jumps
 to it; expanding one shows the four pillars, and expanding a pillar shows each
 metric against the threshold it is judged by. The toolbar toggles between
@@ -48,7 +48,7 @@ Switching files clears the previous rows and requests the new file immediately.
 Updates to the same file keep the rows visible while waiting for refreshed
 results, with a one-second delay after the last health publication. An empty
 answer clears the rows. A failed request or a ten-second timeout shows
-"Function Health unavailable" until the next refresh. Stopping the server also
+"Code Health unavailable" until the next refresh. Stopping the server also
 clears the rows; initialization requests the active file again immediately.
 
 Quality blends four pillars, each taking the worst of its metrics:
@@ -103,10 +103,10 @@ in **Settings | Appearance & Behavior | Notifications**.
 ## Actions
 
 - **Restart Server**
-- **Sort by Quality** — order Function Health worst first
+- **Sort by Quality** — order Code Health worst first
 - **Sort by Position** — order it by where the functions are
 
-The two sort actions appear in the Function Health toolbar one at a time:
+The two sort actions appear in the Code Health toolbar one at a time:
 whichever order the view is not currently in.
 
 ## Building it yourself

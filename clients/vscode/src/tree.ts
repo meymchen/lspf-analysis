@@ -1,5 +1,5 @@
 /**
- * The Function Health view: the file's functions, worst first, expandable
+ * The Code Health view: the file's functions, worst first, expandable
  * down to the individual measure that set each pillar.
  *
  * A hover answers about the function under the pointer, one at a time, and
