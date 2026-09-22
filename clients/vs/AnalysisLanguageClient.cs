@@ -17,7 +17,7 @@ namespace LspfAnalysis
     internal sealed class AnalysisLanguageClient : ILanguageClient, ILanguageClientCustomMessage2
     {
         internal const string ContentTypeName = "lspf-analysis";
-        private readonly SemaphoreSlim gate = new SemaphoreSlim(1, 1);
+        private readonly SemaphoreSlim gate = new(1, 1);
         private readonly ServerProcess server;
         private readonly Action<string> log;
         private bool loaded;
@@ -57,7 +57,7 @@ namespace LspfAnalysis
         }
         internal void ApplyTraceOptions()
         {
-            if (trace != null) trace.Switch.Level = options.Trace == ServerTrace.Verbose ? SourceLevels.Verbose :
+            trace?.Switch.Level = options.Trace == ServerTrace.Verbose ? SourceLevels.Verbose :
                 options.Trace == ServerTrace.Messages ? SourceLevels.Information : SourceLevels.Off;
         }
         public IEnumerable<string> FilesToWatch => null;
@@ -184,7 +184,7 @@ namespace LspfAnalysis
         private sealed class ClientMetadata : ILanguageClientMetadata
         {
             public string ClientName => "LSPF Analysis";
-            public IEnumerable<string> ContentTypes => new[] { ContentTypeName };
+            public IEnumerable<string> ContentTypes => [ContentTypeName];
         }
 
         private sealed class MessageTarget : ILanguageClientMiddleLayer
@@ -195,6 +195,11 @@ namespace LspfAnalysis
             public bool CanHandle(string methodName) => methodName == "textDocument/publishDiagnostics";
             public Task HandleNotificationAsync(string methodName, JToken methodParam, Func<JToken, Task> sendNotification) =>
                 AnalysisSession.Instance.ReceiveDiagnosticsAsync(methodParam, Connection);
+            // The middle layer is not a way into the initialize request: the
+            // platform sends that itself, without consulting this. That is why
+            // the one capability the server needs from us -- that this client
+            // keeps a <span>, so grade letters may be coloured -- travels in
+            // initializationOptions instead. See AnalysisOptions.Payload.
             public Task<JToken> HandleRequestAsync(string methodName, JToken methodParam, Func<JToken, Task<JToken>> sendRequest) => sendRequest(methodParam);
         }
     }

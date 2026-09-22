@@ -63,6 +63,31 @@ class HealthHoverTest : LightPlatformTestCase() {
         assertSame(LspHoverDisabled, LspfAnalysisClientDescriptor(project).lspCustomization.hoverCustomizer)
     }
 
+    /**
+     * The capability that lets the server colour grade letters, and the field
+     * that has to travel with it.
+     *
+     * `parser` is required of `MarkdownClientCapabilities` by LSP 3.17. Sending
+     * `allowedTags` without it does not merely lose the colour: the server
+     * rejects the whole `initialize` and the session never starts.
+     */
+    fun testSpanIsAdvertisedAsAWellFormedMarkdownCapability() {
+        val markdown = LspfAnalysisClientDescriptor(project).clientCapabilities.general?.markdown
+        assertNotNull("no markdown capability is advertised at all", markdown)
+        assertTrue(
+            "span is missing from ${markdown!!.allowedTags}",
+            markdown.allowedTags.orEmpty().contains("span"),
+        )
+        assertFalse(
+            "a markdown capability without a parser makes the server refuse to initialize",
+            markdown.parser.isNullOrBlank(),
+        )
+        // Reading it twice must not accumulate duplicates, since the platform
+        // is free to ask for the capabilities more than once.
+        val again = LspfAnalysisClientDescriptor(project).clientCapabilities.general?.markdown
+        assertEquals(1, again?.allowedTags.orEmpty().count { it == "span" })
+    }
+
     fun testClassAndFunctionHealthUseGutterAndKeepJavaDoc() {
         val source = """
             /** Class documentation. */
@@ -101,21 +126,34 @@ class HealthHoverTest : LightPlatformTestCase() {
         }
     }
 
-    /** The server sends bare letters; the colour is the IDE's to choose. */
-    fun testGradeLettersAreColoured() {
-        val html = healthHoverHtml(project, MARKDOWN)
+    /**
+     * The colour is the server's, fitted to the theme this client reported.
+     * It has to survive the Markdown conversion unaltered.
+     */
+    fun testTheServersGradeColoursReachTheTooltip() {
+        val html = healthHoverHtml(project, COLOURED)
         val coloured = Regex("""<span style="color:#([0-9a-f]{6});">([A-D])</span>""")
             .findAll(html)
             .map { it.groupValues[2] to it.groupValues[1] }
             .toList()
-        assertEquals(listOf("A", "D"), coloured.map { it.first })
-        assertEquals(2, coloured.map { it.second }.toSet().size)
-        // The word in the header is not a grade cell, and nor is a value.
-        assertFalse(html, html.contains(""">grade</span>"""))
+        assertEquals(listOf("A" to "30d158", "D" to "ff6961"), coloured)
+    }
+
+    /**
+     * A server too old to have been told about themes still sends bare
+     * letters. They must come through as letters, not as nothing, and this
+     * client must not reach for a palette of its own to fill the gap.
+     */
+    fun testBareLettersFromAnOlderServerAreLeftBare() {
+        val html = healthHoverHtml(project, MARKDOWN)
+        assertFalse(html, html.contains("<span style=\"color:"))
+        for (grade in listOf(">A<", ">D<")) {
+            assertTrue(html, html.contains(grade))
+        }
     }
 
     companion object {
-        /** The shape the server renders, for a client that takes no HTML. */
+        /** The shape a server that was told no theme renders. */
         private val MARKDOWN = """
             **`area`**  ·  quality **33%**  ·  fair
 
@@ -124,5 +162,10 @@ class HealthHoverTest : LightPlatformTestCase() {
             | A | control flow | cognitive complexity | 0 / 15 |
             | D |  | cyclomatic complexity | 22 / 10 |
         """.trimIndent()
+
+        /** The same, from a server that was told a dark theme. */
+        private val COLOURED = MARKDOWN
+            .replace("| A |", """| <span style="color:#30d158;">A</span> |""")
+            .replace("| D |", """| <span style="color:#ff6961;">D</span> |""")
     }
 }

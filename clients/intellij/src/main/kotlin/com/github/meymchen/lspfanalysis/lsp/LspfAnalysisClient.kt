@@ -63,17 +63,28 @@ object LspfAnalysisClient {
      * Pushes the current settings.
      *
      * The server only accepts pushed configuration, and the payload carries the
-     * IDE's display language along with the thresholds, so a push that dropped
-     * it would leave the server rendering English from here on.
+     * IDE's display language and theme along with the thresholds, so a push that
+     * dropped them would leave the server rendering English, in one fixed
+     * palette, from here on.
+     *
+     * The push goes out before the cached hovers are dropped, and the order
+     * matters: clearing first leaves a window in which a hover can be requested,
+     * answered under the old settings, and cached again -- which would outlive
+     * the change rather than trail it by one request. `didChangeConfiguration`
+     * is a notification and carries no acknowledgement, so a narrow window
+     * remains either way; this is the order that makes it narrow instead of
+     * self-defeating.
      */
     fun pushConfiguration(project: Project) {
-        HealthHoverService.getInstance(project).clear()
-        val client = client(project) ?: return
-        val payload = settingsPayload(project)
-        thisLogger().debug("pushing $SECTION configuration")
-        client.sendNotification { server ->
-            server.workspaceService.didChangeConfiguration(DidChangeConfigurationParams(payload))
+        val client = client(project)
+        if (client != null) {
+            val payload = settingsPayload(project)
+            thisLogger().debug("pushing $SECTION configuration")
+            client.sendNotification { server ->
+                server.workspaceService.didChangeConfiguration(DidChangeConfigurationParams(payload))
+            }
         }
+        HealthHoverService.getInstance(project).clear()
     }
 
     /**

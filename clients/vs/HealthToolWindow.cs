@@ -17,50 +17,50 @@ namespace LspfAnalysis
         internal static string Text(string en, string zh) => CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? zh : en;
         internal static string Name(string name)
         {
-            switch (name)
+            return name switch
             {
-                case "excellent": return Text("Excellent", "优秀");
-                case "good": return Text("Good", "良好");
-                case "fair": return Text("Fair", "一般");
-                case "poor": return Text("Poor", "较差");
-                case "control flow": return Text("Control flow", "控制流");
-                case "size": return Text("Size", "规模");
-                case "vocabulary load": return Text("Vocabulary load", "词汇负担");
-                case "class design": return Text("Class design", "类设计");
-                case "statements": return Text("Statements", "语句数");
-                case "cognitive complexity": return Text("Cognitive complexity", "认知复杂度");
-                case "cyclomatic complexity": return Text("Cyclomatic complexity", "圈复杂度");
-                case "working memory": return Text("Working memory", "工作记忆");
-                case "Halstead difficulty": return Text("Halstead difficulty", "Halstead 难度");
-                case "<anonymous>": return Text("<anonymous>", "＜匿名函数＞");
-                case "complexity": return Text("Complexity", "复杂度");
-                case "length": return Text("Length", "长度");
-                case "workingMemory": return Text("Working memory", "工作记忆");
-                case "interface": return Text("Interface", "接口");
-                case "classDesign": return Text("Class design", "类设计");
-                case "cognitive": return Text("Cognitive complexity", "认知复杂度");
-                case "cyclomatic": return Text("Cyclomatic complexity", "圈复杂度");
-                case "sloc": return Text("Source lines", "源代码行数");
-                case "halsteadDifficulty": return Text("Halstead difficulty", "Halstead 难度");
-                case "parameters": return Text("Parameters", "参数数量");
-                case "wmc": return Text("Weighted methods", "加权方法数");
-                case "publicMethods": return Text("Public methods", "公共方法数");
-                case "publicAttributes": return Text("Public attributes", "公共属性数");
-                default: return name;
-            }
+                "excellent" => Text("Excellent", "优秀"),
+                "good" => Text("Good", "良好"),
+                "fair" => Text("Fair", "一般"),
+                "poor" => Text("Poor", "较差"),
+                "control flow" => Text("Control flow", "控制流"),
+                "size" => Text("Size", "规模"),
+                "vocabulary load" => Text("Vocabulary load", "词汇负担"),
+                "class design" => Text("Class design", "类设计"),
+                "statements" => Text("Statements", "语句数"),
+                "cognitive complexity" => Text("Cognitive complexity", "认知复杂度"),
+                "cyclomatic complexity" => Text("Cyclomatic complexity", "圈复杂度"),
+                "working memory" => Text("Working memory", "工作记忆"),
+                "Halstead difficulty" => Text("Halstead difficulty", "Halstead 难度"),
+                "<anonymous>" => Text("<anonymous>", "＜匿名函数＞"),
+                "complexity" => Text("Complexity", "复杂度"),
+                "length" => Text("Length", "长度"),
+                "workingMemory" => Text("Working memory", "工作记忆"),
+                "interface" => Text("Interface", "接口"),
+                "classDesign" => Text("Class design", "类设计"),
+                "cognitive" => Text("Cognitive complexity", "认知复杂度"),
+                "cyclomatic" => Text("Cyclomatic complexity", "圈复杂度"),
+                "sloc" => Text("Source lines", "源代码行数"),
+                "halsteadDifficulty" => Text("Halstead difficulty", "Halstead 难度"),
+                "parameters" => Text("Parameters", "参数数量"),
+                "wmc" => Text("Weighted methods", "加权方法数"),
+                "publicMethods" => Text("Public methods", "公共方法数"),
+                "publicAttributes" => Text("Public attributes", "公共属性数"),
+                _ => name,
+            };
         }
         internal static string Summary(JObject health) => health == null ? Text("Waiting for analysis…", "等待分析……") :
             $"LSPF  {HealthProtocol.Percent(health["quality"])}  {Name((string)health["grade"])}  ·  " +
             string.Format(Text("{0} functions, {1} below warning", "{0} 个函数，{1} 个低于警告阈值"), health["functions"], health["below"]);
         internal static Brush Color(string grade)
         {
-            switch (grade)
+            return grade switch
             {
-                case "excellent": return Brushes.SeaGreen;
-                case "good": return Brushes.SteelBlue;
-                case "fair": return Brushes.DarkGoldenrod;
-                default: return Brushes.IndianRed;
-            }
+                "excellent" => Brushes.SeaGreen,
+                "good" => Brushes.SteelBlue,
+                "fair" => Brushes.DarkGoldenrod,
+                _ => Brushes.IndianRed,
+            };
         }
     }
 
@@ -76,10 +76,10 @@ namespace LspfAnalysis
 
     internal sealed class HealthPanel : UserControl
     {
-        private readonly TextBlock summary = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(6) };
-        private readonly TreeView tree = new TreeView();
-        private readonly StackPanel worst = new StackPanel { Margin = new Thickness(6) };
-        private readonly ComboBox sort = new ComboBox { Margin = new Thickness(3), MinWidth = 100 };
+        private readonly TextBlock summary = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(6) };
+        private readonly TreeView tree = new();
+        private readonly StackPanel worst = new() { Margin = new Thickness(6) };
+        private readonly ComboBox sort = new() { Margin = new Thickness(3), MinWidth = 100 };
         private JObject shown;
         private string shownUri;
         private bool shownSort;
@@ -160,11 +160,12 @@ namespace LspfAnalysis
             {
                 var uri = doc.Uri;
                 var line = (int)function["startLine"];
-                var node = new TreeViewItem {
+                var node = new TreeViewItem
+                {
                     Header = $"{function["name"]}  {HealthProtocol.Percent(function["quality"])}  ·  {Labels.Name((string)function["weakestPillar"])}",
-                    ToolTip = $"{Labels.Name((string)function["grade"])}  ·  {function["startLine"]}–{function["endLine"]}\n{Labels.Name((string)function["weakestMetric"])}"
+                    ToolTip = $"{Labels.Name((string)function["grade"])}  ·  {function["startLine"]}–{function["endLine"]}\n{Labels.Name((string)function["weakestMetric"])}",
+                    Foreground = Labels.Color((string)function["grade"])
                 };
-                node.Foreground = Labels.Color((string)function["grade"]);
                 node.MouseDoubleClick += (sender, args) => { if (node.IsSelected) { AnalysisPackage.Instance?.Navigate(uri, line); args.Handled = true; } };
                 node.KeyDown += (sender, args) => { if (args.Key == Key.Enter && node.IsSelected) { AnalysisPackage.Instance?.Navigate(uri, line); args.Handled = true; } };
                 foreach (var pillar in (JArray)function["pillars"])

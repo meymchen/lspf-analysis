@@ -1,0 +1,41 @@
+---
+source: crates/lspf-analysis/tests/hover_colours.rs
+expression: out
+---
+dark, stock surface
+  A #30d158
+  B #64d2ff
+  C #ffd60a
+  D #ff6961
+light, stock surface
+  A #21883b
+  B #0055cc
+  C #895400
+  D #d70015
+dark, IntelliJ surface
+  A #30d158
+  B #64d2ff
+  C #ffd60a
+  D #ff867b
+light, IntelliJ surface
+  A #148033
+  B #0055cc
+  C #895400
+  D #d70015
+dark, no surface reported
+  A #30d158
+  B #64d2ff
+  C #ffd60a
+  D #ff6961
+light, no surface reported
+  A #21883b
+  B #0055cc
+  C #895400
+  D #d70015
+high contrast
+  no colour is sent
+no theme reported
+  A #2f9e44
+  B #5a9216
+  C #c08a00
+  D #d1242f

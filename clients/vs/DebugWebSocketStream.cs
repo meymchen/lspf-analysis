@@ -14,10 +14,10 @@ namespace LspfAnalysis
     {
         private const int MaxMessageBytes = 64 * 1024 * 1024;
         private readonly ClientWebSocket socket;
-        private readonly SemaphoreSlim reading = new SemaphoreSlim(1, 1);
-        private readonly SemaphoreSlim writing = new SemaphoreSlim(1, 1);
-        private readonly MemoryStream pending = new MemoryStream();
-        private byte[] incoming = Array.Empty<byte>();
+        private readonly SemaphoreSlim reading = new(1, 1);
+        private readonly SemaphoreSlim writing = new(1, 1);
+        private readonly MemoryStream pending = new();
+        private byte[] incoming = [];
         private int incomingOffset;
         private bool disposed;
         private DebugWebSocketStream(ClientWebSocket socket) => this.socket = socket;
@@ -25,31 +25,29 @@ namespace LspfAnalysis
         internal static async Task<DebugWebSocketStream> ConnectAsync(int port, CancellationToken cancellationToken)
         {
             if (port < 1 || port > 65535) throw new ArgumentOutOfRangeException(nameof(port));
-            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try
             {
-                timeout.CancelAfter(TimeSpan.FromSeconds(20));
-                try
+                while (true)
                 {
-                    while (true)
+                    timeout.Token.ThrowIfCancellationRequested();
+                    var socket = new ClientWebSocket();
+                    // Debug traffic stays on loopback, even on machines with an HTTP proxy.
+                    socket.Options.Proxy = null;
+                    try
                     {
-                        timeout.Token.ThrowIfCancellationRequested();
-                        var socket = new ClientWebSocket();
-                        // Debug traffic stays on loopback, even on machines with an HTTP proxy.
-                        socket.Options.Proxy = null;
-                        try
-                        {
-                            await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), timeout.Token).ConfigureAwait(false);
-                            return new DebugWebSocketStream(socket);
-                        }
-                        catch (WebSocketException) { socket.Dispose(); }
-                        catch { socket.Dispose(); throw; }
-                        await Task.Delay(200, timeout.Token).ConfigureAwait(false);
+                        await socket.ConnectAsync(new Uri($"ws://127.0.0.1:{port}/"), timeout.Token).ConfigureAwait(false);
+                        return new DebugWebSocketStream(socket);
                     }
+                    catch (WebSocketException) { socket.Dispose(); }
+                    catch { socket.Dispose(); throw; }
+                    await Task.Delay(200, timeout.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    throw new TimeoutException($"No WebSocket debug server after 20 seconds. Start lspf-analysis serve --ws 127.0.0.1:{port} and try again.");
-                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"No WebSocket debug server after 20 seconds. Start lspf-analysis serve --ws 127.0.0.1:{port} and try again.");
             }
         }
 
@@ -62,24 +60,22 @@ namespace LspfAnalysis
             {
                 if (incomingOffset == incoming.Length)
                 {
-                    using (var message = new MemoryStream())
+                    using var message = new MemoryStream();
+                    var chunk = new byte[8192];
+                    WebSocketReceiveResult result;
+                    do
                     {
-                        var chunk = new byte[8192];
-                        WebSocketReceiveResult result;
-                        do
-                        {
-                            result = await socket.ReceiveAsync(new ArraySegment<byte>(chunk), token).ConfigureAwait(false);
-                            if (result.MessageType == WebSocketMessageType.Close) return 0;
-                            if (result.MessageType != WebSocketMessageType.Text) throw new InvalidDataException("Expected a WebSocket text message.");
-                            if (message.Length + result.Count > MaxMessageBytes) throw new InvalidDataException("WebSocket message exceeds 64 MiB.");
-                            await message.WriteAsync(chunk, 0, result.Count, token).ConfigureAwait(false);
-                        } while (!result.EndOfMessage);
-                        var header = Encoding.ASCII.GetBytes("Content-Length: " + message.Length.ToString(CultureInfo.InvariantCulture) + "\r\n\r\n");
-                        incoming = new byte[header.Length + message.Length];
-                        Buffer.BlockCopy(header, 0, incoming, 0, header.Length);
-                        Buffer.BlockCopy(message.GetBuffer(), 0, incoming, header.Length, (int)message.Length);
-                        incomingOffset = 0;
-                    }
+                        result = await socket.ReceiveAsync(new ArraySegment<byte>(chunk), token).ConfigureAwait(false);
+                        if (result.MessageType == WebSocketMessageType.Close) return 0;
+                        if (result.MessageType != WebSocketMessageType.Text) throw new InvalidDataException("Expected a WebSocket text message.");
+                        if (message.Length + result.Count > MaxMessageBytes) throw new InvalidDataException("WebSocket message exceeds 64 MiB.");
+                        await message.WriteAsync(chunk, 0, result.Count, token).ConfigureAwait(false);
+                    } while (!result.EndOfMessage);
+                    var header = Encoding.ASCII.GetBytes("Content-Length: " + message.Length.ToString(CultureInfo.InvariantCulture) + "\r\n\r\n");
+                    incoming = new byte[header.Length + message.Length];
+                    Buffer.BlockCopy(header, 0, incoming, 0, header.Length);
+                    Buffer.BlockCopy(message.GetBuffer(), 0, incoming, header.Length, (int)message.Length);
+                    incomingOffset = 0;
                 }
                 var copied = Math.Min(count, incoming.Length - incomingOffset);
                 Buffer.BlockCopy(incoming, incomingOffset, buffer, offset, copied);
@@ -110,7 +106,7 @@ namespace LspfAnalysis
                         return;
                     }
                     int? length = null;
-                    foreach (var line in Encoding.ASCII.GetString(bytes, 0, end - 4).Split(new[] { "\r\n" }, StringSplitOptions.None))
+                    foreach (var line in Encoding.ASCII.GetString(bytes, 0, end - 4).Split(["\r\n"], StringSplitOptions.None))
                     {
                         var split = line.IndexOf(':');
                         if (split < 0 || !line.Substring(0, split).Equals("Content-Length", StringComparison.OrdinalIgnoreCase)) continue;

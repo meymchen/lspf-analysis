@@ -19,6 +19,7 @@ pub mod functions;
 pub mod hover;
 pub mod i18n;
 pub mod status;
+pub mod theme;
 
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -244,12 +245,21 @@ async fn hover(
     let position = params.text_document_position_params.position;
     // A function first: a method's name sits inside its class's span, and
     // it is the narrower answer to the same question.
-    let colour = hover::Colour::of(ctx.workspace().capabilities());
+    let colour = hover::Colour::of(
+        ctx.workspace().capabilities(),
+        settings.declared_tags(),
+        settings.theme().as_ref(),
+    );
     let rendered = hover::function_at(&analyzed.report, &analyzed.text, position, encoding)
-        .map(|(function, range)| (hover::render(function, settings.locale(), colour), range))
+        .map(|(function, range)| (hover::render(function, settings.locale(), &colour), range))
         .or_else(|| {
             hover::class_at(&analyzed.report, &analyzed.text, position, encoding).map(
-                |(class, range)| (hover::render_class(class, settings.locale(), colour), range),
+                |(class, range)| {
+                    (
+                        hover::render_class(class, settings.locale(), &colour),
+                        range,
+                    )
+                },
             )
         });
     let Some((value, range)) = rendered else {

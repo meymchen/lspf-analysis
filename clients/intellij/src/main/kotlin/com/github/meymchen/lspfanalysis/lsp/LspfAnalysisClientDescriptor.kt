@@ -24,14 +24,25 @@ import com.intellij.platform.lsp.api.LspServerNotificationsHandler
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspCustomization
 import com.intellij.platform.lsp.api.customization.LspHoverDisabled
+import org.eclipse.lsp4j.ClientCapabilities
 import org.eclipse.lsp4j.ConfigurationItem
+import org.eclipse.lsp4j.GeneralClientCapabilities
 import org.eclipse.lsp4j.InitializeResult
+import org.eclipse.lsp4j.MarkdownCapabilities
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
 /** The notification group declared in `plugin.xml`. */
 const val NOTIFICATION_GROUP: String = "LSPF Analysis"
+
+/**
+ * The Markdown parser this client renders hovers with, named for the server.
+ *
+ * `DocMarkdownToHtmlConverter` is backed by JetBrains' own Markdown library,
+ * which has no registered name in the LSP spec's sense; this is that library.
+ */
+private const val MARKDOWN_PARSER: String = "intellij-markdown"
 
 /**
  * What the server can analyze, keyed by extension, valued by the LSP language
@@ -112,6 +123,32 @@ class LspfAnalysisClientDescriptor(project: Project) : ProjectWideLspClientDescr
 
     /** Settings the server can use before the first document arrives. */
     override fun createInitializationOptions(): Any = settingsPayload(project)
+
+    /**
+     * Says that this client keeps a `<span>`, which is what lets the server
+     * colour a grade letter.
+     *
+     * `general.markdown.allowedTags` is how LSP 3.17 has a client declare
+     * which HTML tags survive its Markdown renderer. Ours survives it:
+     * `healthHoverHtml` puts the server's Markdown through
+     * `DocMarkdownToHtmlConverter` and the result is shown as HTML. Without
+     * this the server sends bare letters, which it did until the plugin
+     * stopped colouring them itself.
+     *
+     * `parser` is named too, and has to be: LSP 3.17 makes it a required field
+     * of `MarkdownClientCapabilities`, so a capability object carrying only
+     * `allowedTags` is not a valid one. The server rejects the whole
+     * `initialize` over it rather than ignoring the part it cannot read, which
+     * means a missing `parser` costs the entire session, not the colour.
+     */
+    override val clientCapabilities: ClientCapabilities
+        get() = super.clientCapabilities.apply {
+            val general = general ?: GeneralClientCapabilities().also { general = it }
+            general.markdown = (general.markdown ?: MarkdownCapabilities()).apply {
+                if (parser.isNullOrBlank()) parser = MARKDOWN_PARSER
+                allowedTags = (allowedTags.orEmpty() + "span").distinct()
+            }
+        }
 
     /**
      * Answers a server that pulls its configuration instead of taking the push.

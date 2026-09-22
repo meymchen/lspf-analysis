@@ -36,15 +36,24 @@ namespace LspfAnalysis
                     table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                     for (var column = 0; column < cells.Length; column++)
                     {
-                        var text = Inline(cells[column]);
+                        // A leading cell the server coloured is drawn as the
+                        // letter alone, in the colour it chose. Anything else,
+                        // including a bare letter from a server that was never
+                        // told a theme, falls through to the ordinary inline
+                        // path and is drawn in the text colour.
+                        TextBlock text;
+                        if (column == 0 && row > 0 &&
+                            HealthTheme.TryReadGrade(cells[column], out var grade, out var color))
+                        {
+                            text = Inline(grade);
+                            panel.AddGrade(text, color);
+                        }
+                        else
+                        {
+                            text = Inline(cells[column]);
+                        }
                         text.Margin = new Thickness(3, 2, 12, 2);
                         if (row == 0) text.FontWeight = FontWeights.SemiBold;
-                        if (column == 0 && row > 0)
-                        {
-                            var grade = cells[column].Replace("**", "");
-                            if (new[] { "A", "B", "C", "D" }.Contains(grade))
-                                panel.AddGrade(text, grade);
-                        }
                         Grid.SetRow(text, row);
                         Grid.SetColumn(text, column);
                         table.Children.Add(text);
@@ -86,7 +95,7 @@ namespace LspfAnalysis
 
     internal sealed class HealthHoverPanel : StackPanel
     {
-        private readonly Dictionary<TextBlock, string> grades = new Dictionary<TextBlock, string>();
+        private readonly Dictionary<TextBlock, Color> grades = new Dictionary<TextBlock, Color>();
         private static readonly DependencyProperty ThemeBackgroundProperty = DependencyProperty.Register(
             "ThemeBackground", typeof(Brush), typeof(HealthHoverPanel), new PropertyMetadata(null, ThemeChanged));
         private static readonly DependencyProperty ThemeForegroundProperty = DependencyProperty.Register(
@@ -105,10 +114,18 @@ namespace LspfAnalysis
             SetResourceReference(HighContrastProperty, SystemParameters.HighContrastKey);
         }
 
-        internal void AddGrade(TextBlock text, string grade)
+        // Records a grade letter and the colour the server chose for it.
+        //
+        // The colour was already fitted to the background reported to the
+        // server, so nothing is adjusted here. A popup already open when the
+        // theme changes keeps these colours: the server has to be asked again
+        // to get new ones, and it is asked on the next hover. The ordinary
+        // text around them still follows the theme live, through the dynamic
+        // resources above.
+        internal void AddGrade(TextBlock text, Color color)
         {
             text.FontWeight = FontWeights.Bold;
-            grades.Add(text, grade);
+            grades.Add(text, color);
             RefreshColors();
         }
 
@@ -122,65 +139,30 @@ namespace LspfAnalysis
             // usable appearance. Follow the requested dark-mode fallback.
             var knownBackground = background != null && background.Color.A == 255 && background.Opacity == 1;
             var surface = knownBackground ? background.Color : Color.FromRgb(43, 43, 43);
-            var dark = !knownBackground || Luminance(surface) < 0.179;
+            var dark = !knownBackground || HealthTheme.Luminance(surface) < 0.179;
             var foreground = GetValue(ThemeForegroundProperty) as Brush ??
                 MakeBrush(dark ? "#F5F5F7" : "#1D1D1F");
             SetValue(TextElement.ForegroundProperty, foreground);
+            var highContrast = (bool)GetValue(HighContrastProperty);
             foreach (var grade in grades)
             {
-                if ((bool)GetValue(HighContrastProperty))
-                {
-                    // Respect the user's high-contrast text choice. The grade and
-                    // bold weight convey the same meaning without relying on hue.
-                    grade.Key.Foreground = foreground;
-                    continue;
-                }
-                // Apple HIG-inspired semantic families with separate appearances.
-                // These are adapted for VS surfaces, not fixed Apple system tokens.
-                string color;
-                switch (grade.Value)
-                {
-                    case "A": color = dark ? "#30D158" : "#248A3D"; break;
-                    case "B": color = dark ? "#64D2FF" : "#0055CC"; break;
-                    case "C": color = dark ? "#FFD60A" : "#895400"; break;
-                    default: color = dark ? "#FF6961" : "#D70015"; break;
-                }
-                grade.Key.Foreground = WithContrast((Color)ColorConverter.ConvertFromString(color), surface, dark);
+                // Under high contrast the server sends no colour at all, so
+                // there is normally nothing here to override. This still
+                // honours it, for the case where the theme turned on after a
+                // coloured answer was received: the letter and its bold weight
+                // carry the grade without relying on hue.
+                grade.Key.Foreground = highContrast ? foreground : MakeBrush(grade.Value);
             }
         }
 
-        private static SolidColorBrush MakeBrush(string color)
+        private static SolidColorBrush MakeBrush(string color) =>
+            MakeBrush((Color)ColorConverter.ConvertFromString(color));
+
+        private static SolidColorBrush MakeBrush(Color color)
         {
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+            var brush = new SolidColorBrush(color);
             brush.Freeze();
             return brush;
-        }
-
-        private static SolidColorBrush WithContrast(Color color, Color background, bool dark)
-        {
-            var adjusted = color;
-            // Small colored text gets at least 4.5:1 against the actual VS popup
-            // background, including custom themes. Preserve hue as far as possible.
-            for (var step = 1; Contrast(adjusted, background) < 4.5 && step <= 255; step++)
-            {
-                var target = dark ? 255 : 0;
-                adjusted = Color.FromRgb(
-                    (byte)(color.R + (target - color.R) * step / 255),
-                    (byte)(color.G + (target - color.G) * step / 255),
-                    (byte)(color.B + (target - color.B) * step / 255));
-            }
-            var brush = new SolidColorBrush(adjusted);
-            brush.Freeze();
-            return brush;
-        }
-
-        private static double Contrast(Color a, Color b) =>
-            (Math.Max(Luminance(a), Luminance(b)) + 0.05) / (Math.Min(Luminance(a), Luminance(b)) + 0.05);
-        private static double Luminance(Color color) => 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
-        private static double Linear(byte channel)
-        {
-            var value = channel / 255.0;
-            return value <= 0.04045 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
         }
     }
 }

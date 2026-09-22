@@ -40,13 +40,13 @@ namespace LspfAnalysis
 
         public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
         {
-            switch (value as string)
+            return (value as string) switch
             {
-                case "关闭": return ServerTrace.Off;
-                case "消息": return ServerTrace.Messages;
-                case "详细": return ServerTrace.Verbose;
-            }
-            return base.ConvertFrom(context, culture, value);
+                "关闭" => ServerTrace.Off,
+                "消息" => ServerTrace.Messages,
+                "详细" => ServerTrace.Verbose,
+                _ => base.ConvertFrom(context, culture, value),
+            };
         }
     }
 

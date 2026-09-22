@@ -3,11 +3,16 @@ using System.ComponentModel;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Media;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using Newtonsoft.Json.Linq;
 
 namespace LspfAnalysis
 {
+    // This property-grid options page is edited as code, not with a component designer.
+    [DesignerCategory("")]
     [Guid("2FC9E51E-82D2-411E-95EF-E491D546BDF9")]
     public sealed class AnalysisOptions : DialogPage
     {
@@ -107,8 +112,45 @@ namespace LspfAnalysis
             return new JObject { ["lspfAnalysis"] = new JObject {
                 ["health"] = health,
                 ["diagnostics"] = new JObject { ["enabled"] = DiagnosticsEnabled, ["perMetric"] = DiagnosticsPerMetric, ["file"] = DiagnosticsFile },
-                ["locale"] = CultureInfo.CurrentUICulture.Name.ToLowerInvariant()
+                ["locale"] = CultureInfo.CurrentUICulture.Name.ToLowerInvariant(),
+                // Says that this client keeps a <span>, which is what lets the
+                // server colour a grade letter. LSP's own place for this is
+                // general.markdown.allowedTags in the initialize request, and
+                // that is where the VS Code and IntelliJ clients say it. This
+                // one cannot: ILanguageClient exposes no hook for shaping
+                // client capabilities, and the platform sends initialize
+                // without consulting the middle layer. initializationOptions
+                // is the part of the handshake this client does control, so
+                // the same list travels here and the server unions the two.
+                ["markdown"] = new JObject { ["allowedTags"] = new JArray("span") },
+                // The appearance the server colours grade letters for. Two
+                // separate things: the kind is the reader's intent, which
+                // decides the palette, and the background is the surface the
+                // letters land on, which the palette is then fitted to. They
+                // answer different questions, so they cannot disagree.
+                ["theme"] = ThemePayload()
             } };
+        }
+
+        // The tooltip surface as the server needs to see it.
+        //
+        // The same resource the hover popup is painted with, resolved here
+        // rather than inside the popup because the server has to be told
+        // before it answers. A theme whose tooltip brush is missing or
+        // translucent identifies no usable surface, so only the kind is sent
+        // and the server falls back to a stand-in for it.
+        private static JObject ThemePayload()
+        {
+            var highContrast = SystemParameters.HighContrast;
+            var surface = VSColorTheme.GetThemedColor(EnvironmentColors.ToolTipColorKey);
+            var theme = new JObject
+            {
+                ["kind"] = HealthTheme.Kind(
+                    Color.FromRgb(surface.R, surface.G, surface.B), highContrast)
+            };
+            if (surface.A == 255)
+                theme["background"] = HealthTheme.Hex(Color.FromRgb(surface.R, surface.G, surface.B));
+            return theme;
         }
 
         internal string ValidateSettings()

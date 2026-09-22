@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.LanguageServer.Client;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using Microsoft.VisualStudio.Utilities;
@@ -49,7 +50,7 @@ namespace LspfAnalysis
             var components = componentService as IComponentModel ?? throw new InvalidOperationException("Component model is unavailable.");
             var contentTypes = components.GetService<IContentTypeRegistryService>();
             if (contentTypes.GetContentType(AnalysisLanguageClient.ContentTypeName) == null)
-                contentTypes.AddContentType(AnalysisLanguageClient.ContentTypeName, new[] { CodeRemoteContentDefinition.CodeRemoteBaseTypeName });
+                contentTypes.AddContentType(AnalysisLanguageClient.ContentTypeName, [CodeRemoteContentDefinition.CodeRemoteBaseTypeName]);
             broker = components.GetService<ILanguageClientBroker>();
             Options = (AnalysisOptions)GetDialogPage(typeof(AnalysisOptions));
             client = new AnalysisLanguageClient(Log, Options);
@@ -66,6 +67,19 @@ namespace LspfAnalysis
             commands.AddCommand(new MenuCommand((sender, args) => ShowHealth(), new CommandID(commandSet, 0x0104)));
             commands.AddCommand(new MenuCommand((sender, args) => OpenSettings(), new CommandID(commandSet, 0x0105)));
             commands.AddCommand(new MenuCommand((sender, args) => RunCommand(true, true, true), new CommandID(commandSet, 0x0106)));
+            // The server colours grade letters for the theme it was told about,
+            // so a change of theme has to be pushed like any other setting. A
+            // popup already open keeps the colours it was drawn with; the next
+            // hover is answered for the new theme.
+            VSColorTheme.ThemeChanged += OnThemeChanged;
+        }
+
+        private void OnThemeChanged(ThemeChangedEventArgs args)
+        {
+            // Raised on the UI thread, which is where ApplySettings belongs.
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (closing) return;
+            ApplySettings();
         }
 
         internal async Task EnsureStartedAsync()
@@ -90,8 +104,7 @@ namespace LspfAnalysis
         internal void ShowProblems() => errors.Show();
         internal void ShowHealth() => AnalysisSession.Instance.Run(async () =>
         {
-            var window = await ShowToolWindowAsync(typeof(HealthToolWindow), 0, true, DisposalToken);
-            if (window == null) throw new InvalidOperationException("Function Health tool window is unavailable.");
+            var window = await ShowToolWindowAsync(typeof(HealthToolWindow), 0, true, DisposalToken) ?? throw new InvalidOperationException("Function Health tool window is unavailable.");
         });
 
         internal void Navigate(string uri, int line)
@@ -206,6 +219,7 @@ namespace LspfAnalysis
             if (disposing && client != null)
             {
                 closing = true;
+                VSColorTheme.ThemeChanged -= OnThemeChanged;
                 AnalysisSession.Instance.Changed -= RefreshResults;
                 errors?.Dispose();
                 Instance = null;

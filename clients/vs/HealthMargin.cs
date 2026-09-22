@@ -43,12 +43,12 @@ namespace LspfAnalysis
             Content = Labels.Summary(doc?.Summary);
             if (doc?.Summary is JObject health)
             {
-                ToolTip = string.Join(Environment.NewLine, new[] {
+                ToolTip = string.Join(Environment.NewLine, [
                     Labels.Summary(health),
                     $"{Labels.Name("excellent")}: {health["bands"]["excellent"]}  ·  {Labels.Name("good")}: {health["bands"]["good"]}",
                     $"{Labels.Name("fair")}: {health["bands"]["fair"]}  ·  {Labels.Name("poor")}: {health["bands"]["poor"]}",
                     Labels.Text("Click to explore functions and open the weakest ones.", "点击查看函数详情并跳转到较弱的函数。")
-                });
+                ]);
             }
             else ToolTip = null;
         }

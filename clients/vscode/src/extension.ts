@@ -48,6 +48,7 @@ import {
   renderStatus,
   type FileHealth,
 } from './status.js';
+import { themeKind } from './theme.js';
 import { FunctionHealthProvider } from './tree.js';
 
 /** The settings section the server reads, and the client's own id. */
@@ -143,7 +144,19 @@ function settingsPayload(): Record<string, unknown> {
   return {
     ...workspace.getConfiguration().get<Record<string, unknown>>(SECTION),
     locale: env.language,
+    // The theme rides along for the same reason the language does: the
+    // server colours the grade letters in a hover and cannot pick a colour
+    // that reads without knowing what it reads against. Only the kind is
+    // sent — see `./theme.js` for why the surface itself cannot be.
+    theme: { kind: themeKind(window.activeColorTheme.kind) },
   };
+}
+
+/** Pushes the current settings, whatever prompted the change. */
+async function pushSettings(): Promise<void> {
+  await client?.sendNotification(DidChangeConfigurationNotification.type, {
+    settings: { [SECTION]: settingsPayload() },
+  });
 }
 
 /** Puts the view in one of its two orders, and tells the title bar which. */
@@ -206,6 +219,13 @@ export async function activate(context: ExtensionContext): Promise<void> {
       if (event.affectsConfiguration(`${SECTION}.statusBar`)) {
         refreshStatus();
       }
+    }),
+    // The theme is not one of the settings the editor watches for us, so a
+    // change to it has to be pushed by hand. A hover already on screen keeps
+    // the colours it was drawn with; the next one is fitted to the new
+    // theme.
+    window.onDidChangeActiveColorTheme(() => {
+      void pushSettings();
     }),
   );
   await start(context);
@@ -342,12 +362,10 @@ async function start(context: ExtensionContext): Promise<void> {
     markdown: { supportHtml: true },
     middleware: {
       workspace: {
-        // The default push sends the configuration section verbatim,
-        // which would drop the language the server renders in.
+        // The default push sends the configuration section verbatim, which
+        // would drop the language and theme the server renders with.
         didChangeConfiguration: async () => {
-          await client?.sendNotification(DidChangeConfigurationNotification.type, {
-            settings: { [SECTION]: settingsPayload() },
-          });
+          await pushSettings();
         },
       },
       // The server writes Markdown every LSP client can render, which

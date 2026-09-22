@@ -68,17 +68,15 @@ namespace LspfAnalysis
                 var point = session.GetTriggerPoint(snapshot);
                 if (!point.HasValue) return null;
                 var line = point.Value.GetContainingLine();
-                using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-                {
-                    timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                    var answer = await AnalysisSession.Instance.HoverAsync(buffer, line.LineNumber, point.Value.Position - line.Start.Position, timeout.Token);
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-                    if (snapshot != buffer.CurrentSnapshot || !(answer is JObject obj) || obj["contents"]?["value"]?.Type != JTokenType.String) return null;
-                    var range = EditorRange.Span(snapshot, obj["range"]);
-                    if (!range.HasValue || !range.Value.Contains(point.Value)) return null;
-                    var content = HealthHoverView.Create((string)obj["contents"]["value"]);
-                    return new QuickInfoItem(snapshot.CreateTrackingSpan(range.Value.Span, SpanTrackingMode.EdgeInclusive), content);
-                }
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(5));
+                var answer = await AnalysisSession.Instance.HoverAsync(buffer, line.LineNumber, point.Value.Position - line.Start.Position, timeout.Token);
+                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+                if (snapshot != buffer.CurrentSnapshot || answer is not JObject obj || obj["contents"]?["value"]?.Type != JTokenType.String) return null;
+                var range = EditorRange.Span(snapshot, obj["range"]);
+                if (!range.HasValue || !range.Value.Contains(point.Value)) return null;
+                var content = HealthHoverView.Create((string)obj["contents"]["value"]);
+                return new QuickInfoItem(snapshot.CreateTrackingSpan(range.Value.Span, SpanTrackingMode.EdgeInclusive), content);
             }
             catch (OperationCanceledException) { return null; }
             catch (Exception error) { AnalysisSession.Instance.Log?.Invoke("Hover: " + error.Message); return null; }
@@ -89,7 +87,7 @@ namespace LspfAnalysis
     {
         internal static SnapshotSpan? Span(ITextSnapshot snapshot, JToken range)
         {
-            if (!(range is JObject)) return null;
+            if (range is not JObject) return null;
             var start = Position(snapshot, range["start"]);
             var end = Position(snapshot, range["end"]);
             if (!start.HasValue || !end.HasValue || end < start) return null;
@@ -98,7 +96,7 @@ namespace LspfAnalysis
 
         private static int? Position(ITextSnapshot snapshot, JToken point)
         {
-            if (!(point is JObject) || point["line"]?.Type != JTokenType.Integer || point["character"]?.Type != JTokenType.Integer) return null;
+            if (point is not JObject || point["line"]?.Type != JTokenType.Integer || point["character"]?.Type != JTokenType.Integer) return null;
             var row = (double)point["line"];
             var column = (double)point["character"];
             if (row < 0 || row >= snapshot.LineCount || column < 0 || column > int.MaxValue) return null;
@@ -153,7 +151,7 @@ namespace LspfAnalysis
         // presentation model using its current tooltip and editor font settings.
         internal static ClassifiedTextElement Create(string message)
         {
-            message = message ?? string.Empty;
+            message ??= string.Empty;
             var runs = new List<ClassifiedTextRun>();
             var start = 0;
             while (start < message.Length)
