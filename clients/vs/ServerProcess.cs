@@ -10,7 +10,7 @@ namespace LspfAnalysis
     // Owns the OS process only. Visual Studio owns the LSP connection and protocol.
     internal sealed class ServerProcess : IDisposable
     {
-        private static readonly object processStartGate = new object();
+        private static readonly object processStartGate = new();
         private readonly Action<string> log;
         private Process process;
 

@@ -14,18 +14,18 @@ namespace LspfAnalysis
 
         internal static string Language(string path)
         {
-            switch (Path.GetExtension(path).ToLowerInvariant())
+            return Path.GetExtension(path).ToLowerInvariant() switch
             {
-                case ".cpp": case ".cc": case ".cxx": case ".h": case ".hpp": case ".hxx": return "cpp";
-                case ".java": return "java";
-                case ".js": case ".mjs": case ".cjs": return "javascript";
-                case ".jsx": return "javascriptreact";
-                case ".ts": case ".mts": case ".cts": return "typescript";
-                case ".tsx": return "typescriptreact";
-                case ".py": case ".pyw": return "python";
-                case ".rs": return "rust";
-                default: return null;
-            }
+                ".cpp" or ".cc" or ".cxx" or ".h" or ".hpp" or ".hxx" => "cpp",
+                ".java" => "java",
+                ".js" or ".mjs" or ".cjs" => "javascript",
+                ".jsx" => "javascriptreact",
+                ".ts" or ".mts" or ".cts" => "typescript",
+                ".tsx" => "typescriptreact",
+                ".py" or ".pyw" => "python",
+                ".rs" => "rust",
+                _ => null,
+            };
         }
 
         internal static bool IsLocalUri(string text) =>
@@ -43,28 +43,28 @@ namespace LspfAnalysis
 
         internal static JObject FileHealth(JToken token)
         {
-            if (!(token is JObject obj) || !Text(obj["uri"]) || !IsLocalUri((string)obj["uri"]) ||
+            if (token is not JObject obj || !Text(obj["uri"]) || !IsLocalUri((string)obj["uri"]) ||
                 !Score(obj["quality"]) || !Grade(obj["grade"]) || !Count(obj["functions"]) || !Count(obj["below"]) ||
-                !(obj["bands"] is JObject bands) || !(obj["worst"] is JArray worst)) return null;
+                obj["bands"] is not JObject bands || obj["worst"] is not JArray worst) return null;
             if (!new[] { "excellent", "good", "fair", "poor" }.All(b => Count(bands[b]))) return null;
-            if (worst.Any(w => !(w is JObject) || !Text(w["name"]) || !Score(w["quality"]) ||
+            if (worst.Any(w => w is not JObject || !Text(w["name"]) || !Score(w["quality"]) ||
                 !Grade(w["grade"]) || !Count(w["line"], 1) || !Text(w["weakestPillar"]) || !Text(w["weakestMetric"]))) return null;
             return obj;
         }
 
         internal static JObject FunctionHealth(JToken token)
         {
-            if (!(token is JObject obj) || !Text(obj["uri"]) || !IsLocalUri((string)obj["uri"]) ||
-                !(obj["functions"] is JArray functions)) return null;
+            if (token is not JObject obj || !Text(obj["uri"]) || !IsLocalUri((string)obj["uri"]) ||
+                obj["functions"] is not JArray functions) return null;
             foreach (var f in functions)
             {
-                if (!(f is JObject) || !Text(f["name"]) || !Score(f["quality"]) || !Grade(f["grade"]) ||
+                if (f is not JObject || !Text(f["name"]) || !Score(f["quality"]) || !Grade(f["grade"]) ||
                     !Count(f["startLine"], 1) || !Count(f["endLine"], 1) || (int)f["endLine"] < (int)f["startLine"] ||
-                    !Text(f["weakestPillar"]) || !Text(f["weakestMetric"]) || !(f["pillars"] is JArray pillars)) return null;
+                    !Text(f["weakestPillar"]) || !Text(f["weakestMetric"]) || f["pillars"] is not JArray pillars) return null;
                 foreach (var p in pillars)
                 {
-                    if (!(p is JObject) || !Text(p["name"]) || !Score(p["score"]) || !(p["measures"] is JArray measures)) return null;
-                    if (measures.Any(m => !(m is JObject) || !Text(m["name"]) || !Number(m["value"]) ||
+                    if (p is not JObject || !Text(p["name"]) || !Score(p["score"]) || p["measures"] is not JArray measures) return null;
+                    if (measures.Any(m => m is not JObject || !Text(m["name"]) || !Number(m["value"]) ||
                         !Number(m["threshold"]) || (double)m["threshold"] <= 0 || !Score(m["score"]))) return null;
                 }
             }

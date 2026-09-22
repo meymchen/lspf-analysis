@@ -23,45 +23,43 @@ namespace LspfAnalysis
 
         internal static async Task<TcpClient> ConnectAsync(int port, CancellationToken cancellationToken)
         {
-            using (var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try
             {
-                timeout.CancelAfter(TimeSpan.FromSeconds(20));
-                try
+                while (true)
                 {
-                    while (true)
+                    timeout.Token.ThrowIfCancellationRequested();
+                    var socket = new TcpClient(AddressFamily.InterNetwork) { NoDelay = true };
+                    try
                     {
+                        // Framework's ConnectAsync has no cancellation overload.
+                        using (timeout.Token.Register(socket.Close))
+                            await socket.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
                         timeout.Token.ThrowIfCancellationRequested();
-                        var socket = new TcpClient(AddressFamily.InterNetwork) { NoDelay = true };
-                        try
-                        {
-                            // Framework's ConnectAsync has no cancellation overload.
-                            using (timeout.Token.Register(socket.Close))
-                                await socket.ConnectAsync(IPAddress.Loopback, port).ConfigureAwait(false);
-                            timeout.Token.ThrowIfCancellationRequested();
-                            return socket;
-                        }
-                        catch (SocketException)
-                        {
-                            socket.Dispose();
-                        }
-                        // Framework's EndConnect can also throw NullReferenceException
-                        // when cancellation closes the client before its callback runs.
-                        catch (Exception) when (timeout.IsCancellationRequested)
-                        {
-                            socket.Dispose();
-                        }
-                        catch
-                        {
-                            socket.Dispose();
-                            throw;
-                        }
-                        await Task.Delay(200, timeout.Token).ConfigureAwait(false);
+                        return socket;
                     }
+                    catch (SocketException)
+                    {
+                        socket.Dispose();
+                    }
+                    // Framework's EndConnect can also throw NullReferenceException
+                    // when cancellation closes the client before its callback runs.
+                    catch (Exception) when (timeout.IsCancellationRequested)
+                    {
+                        socket.Dispose();
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                    await Task.Delay(200, timeout.Token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    throw new TimeoutException($"No TCP debug server on 127.0.0.1:{port} after 20 seconds. Start lspf-analysis serve --tcp 127.0.0.1:{port} and try again.");
-                }
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"No TCP debug server on 127.0.0.1:{port} after 20 seconds. Start lspf-analysis serve --tcp 127.0.0.1:{port} and try again.");
             }
         }
     }

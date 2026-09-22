@@ -16,7 +16,7 @@ namespace LspfAnalysis
     // requests; a connection generation prevents old responses crossing a restart.
     internal sealed class AnalysisSession
     {
-        internal static readonly AnalysisSession Instance = new AnalysisSession();
+        internal static readonly AnalysisSession Instance = new();
         internal sealed class Document
         {
             internal ITextDocument Source;
@@ -27,11 +27,11 @@ namespace LspfAnalysis
             internal int Views;
             internal JObject Summary;
             internal JObject Functions;
-            internal JArray Diagnostics = new JArray();
+            internal JArray Diagnostics = [];
         }
 
-        private readonly Dictionary<ITextBuffer, Document> documents = new Dictionary<ITextBuffer, Document>();
-        private readonly SemaphoreSlim queue = new SemaphoreSlim(1, 1);
+        private readonly Dictionary<ITextBuffer, Document> documents = [];
+        private readonly SemaphoreSlim queue = new(1, 1);
         private JsonRpc rpc;
         private int generation;
         private int settingsRevision;
@@ -95,7 +95,7 @@ namespace LspfAnalysis
                 if (doc == null) return;
                 doc.Revision++;
                 doc.Summary = doc.Functions = null;
-                doc.Diagnostics = new JArray();
+                doc.Diagnostics = [];
                 Changed?.Invoke();
                 var revision = doc.Revision;
                 await Task.Delay(250);
@@ -118,7 +118,7 @@ namespace LspfAnalysis
                     doc.Revision++;
                     doc.Sent = null;
                     doc.Summary = doc.Functions = null;
-                    doc.Diagnostics = new JArray();
+                    doc.Diagnostics = [];
                     await EnqueueAsync(async connection => await connection.NotifyWithParameterObjectAsync("textDocument/didClose", new { textDocument = new { uri = oldUri } }));
                 }
                 Schedule(doc);
@@ -202,7 +202,7 @@ namespace LspfAnalysis
             {
                 doc.Sent = null;
                 doc.Summary = doc.Functions = null;
-                doc.Diagnostics = new JArray();
+                doc.Diagnostics = [];
             }
             Changed?.Invoke();
         }
@@ -216,15 +216,13 @@ namespace LspfAnalysis
             var uri = doc.Uri;
             var epoch = generation;
             var configuration = settingsRevision;
-            using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
-            {
-                var answer = await connection.InvokeWithParameterObjectAsync<JToken>(HealthProtocol.FunctionHealthMethod, new { uri }, timeout.Token);
-                await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                if (epoch != generation || configuration != settingsRevision || Find(doc.Source.TextBuffer) != doc || doc.Uri != uri || snapshot != doc.Source.TextBuffer.CurrentSnapshot) return;
-                var health = HealthProtocol.FunctionHealth(answer);
-                doc.Functions = (string)health?["uri"] == uri ? health : null;
-                Changed?.Invoke();
-            }
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var answer = await connection.InvokeWithParameterObjectAsync<JToken>(HealthProtocol.FunctionHealthMethod, new { uri }, timeout.Token);
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            if (epoch != generation || configuration != settingsRevision || Find(doc.Source.TextBuffer) != doc || doc.Uri != uri || snapshot != doc.Source.TextBuffer.CurrentSnapshot) return;
+            var health = HealthProtocol.FunctionHealth(answer);
+            doc.Functions = (string)health?["uri"] == uri ? health : null;
+            Changed?.Invoke();
         }));
 
         private async Task SynchronizeAsync(JsonRpc connection, Document doc)
@@ -249,7 +247,7 @@ namespace LspfAnalysis
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             settingsRevision++;
-            foreach (var doc in documents.Values) { doc.Summary = doc.Functions = null; doc.Diagnostics = new JArray(); }
+            foreach (var doc in documents.Values) { doc.Summary = doc.Functions = null; doc.Diagnostics = []; }
             Changed?.Invoke();
             Run(async () =>
             {
@@ -272,7 +270,7 @@ namespace LspfAnalysis
 
         internal Task ReceiveDiagnosticsAsync(JToken payload, JsonRpc connection) => DispatchAsync(connection, () =>
         {
-            if (!(payload is JObject obj) || obj["uri"]?.Type != JTokenType.String || !(obj["diagnostics"] is JArray diagnostics)) return;
+            if (payload is not JObject obj || obj["uri"]?.Type != JTokenType.String || obj["diagnostics"] is not JArray diagnostics) return;
             var doc = documents.Values.FirstOrDefault(d => d.Uri == (string)obj["uri"]);
             if (doc == null || doc.Sent != doc.Source.TextBuffer.CurrentSnapshot ||
                 (obj["version"]?.Type == JTokenType.Integer && (int)obj["version"] != doc.Version)) return;
@@ -282,10 +280,10 @@ namespace LspfAnalysis
 
         private static bool ValidDiagnostic(JToken d)
         {
-            if (!(d is JObject) || d["message"]?.Type != JTokenType.String || !(d["range"] is JObject range)) return false;
+            if (d is not JObject || d["message"]?.Type != JTokenType.String || d["range"] is not JObject range) return false;
             foreach (var end in new[] { "start", "end" })
             {
-                if (!(range[end] is JObject point)) return false;
+                if (range[end] is not JObject point) return false;
                 foreach (var axis in new[] { "line", "character" })
                     if (point[axis]?.Type != JTokenType.Integer || (double)point[axis] < 0 || (double)point[axis] > int.MaxValue) return false;
             }
