@@ -1,5 +1,7 @@
 # lspf-analysis
 
+[English](./README.md) · [简体中文](./README.zh-CN.md)
+
 **lspf-analysis** is a language server that tells you, while you type, which
 functions are getting hard to work with.
 
