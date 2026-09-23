@@ -104,7 +104,7 @@ namespace LspfAnalysis
         internal void ShowProblems() => errors.Show();
         internal void ShowHealth() => AnalysisSession.Instance.Run(async () =>
         {
-            var window = await ShowToolWindowAsync(typeof(HealthToolWindow), 0, true, DisposalToken) ?? throw new InvalidOperationException("Function Health tool window is unavailable.");
+            var window = await ShowToolWindowAsync(typeof(HealthToolWindow), 0, true, DisposalToken) ?? throw new InvalidOperationException("Code Health tool window is unavailable.");
         });
 
         internal void Navigate(string uri, int line)

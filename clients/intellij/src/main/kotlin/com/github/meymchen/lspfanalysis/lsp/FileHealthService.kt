@@ -22,7 +22,7 @@ sealed interface FileHealthEvent {
  * The latest file summary per document, and who to tell when one arrives.
  *
  * The server re-analyzes on every keystroke and announces it here, so both the
- * status bar and the Function Health view can follow one source rather than
+ * status bar and the Code Health view can follow one source rather than
  * each listening to the connection.
  */
 @Service(Service.Level.PROJECT)

@@ -10,7 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.messages.Topic
 
 /**
- * Which order the Function Health view is in.
+ * Which order the Code Health view is in.
  *
  * A project service rather than panel state, so the two actions that change it
  * can be ordinary registered actions -- reachable from Find Action, the way the

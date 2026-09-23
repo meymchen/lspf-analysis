@@ -19,7 +19,7 @@
       </Button>
       <Button guid="CommandSet" id="FunctionHealth" priority="0x0500" type="Button">
         <Parent guid="CommandSet" id="ServerGroup" />
-        <Strings><ButtonText>LSPF Analysis: Function Health</ButtonText></Strings>
+        <Strings><ButtonText>LSPF Analysis: Code Health</ButtonText></Strings>
       </Button>
       <Button guid="CommandSet" id="Settings" priority="0x0600" type="Button">
         <Parent guid="CommandSet" id="ServerGroup" />

@@ -1,6 +1,6 @@
 # LSPF Analysis for VS Code
 
-Tells you, while you type, which functions are getting hard to work with.
+Code health analysis for functions and classes, updated while you type.
 
 This extension bundles the [lspf-analysis](https://github.com/meymchen/lspf-analysis)
 language server, so nothing else has to be installed — no Rust toolchain, no
@@ -27,7 +27,7 @@ opening first — each a link that jumps to the line, alongside shortcuts to the
 Problems view and the thresholds. Turn the item off with
 `lspfAnalysis.statusBar.enabled`.
 
-**Function Health**, in the Explorer, lists every function of the file at
+**Code Health**, in the Explorer, lists every function of the file at
 once, worst first, rather than one at a time under the pointer. Clicking a
 row jumps to it; expanding one shows the four pillars, and expanding a pillar
 shows each metric against the threshold it is judged by. The title bar toggles
@@ -73,7 +73,7 @@ a restart.
 ## Commands
 
 - **LSPF Analysis: Restart Server**
-- **LSPF Analysis: Sort by Quality** — order Function Health worst first
+- **LSPF Analysis: Sort by Quality** — order Code Health worst first
 - **LSPF Analysis: Sort by Position** — order it by where the functions are
 
 `LSPF Analysis: Go to Function` also exists, but takes arguments and is only

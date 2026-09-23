@@ -2,8 +2,8 @@
 
 [English](./README.md) · [简体中文](./README.zh-CN.md)
 
-**lspf-analysis** is a language server that tells you, while you type, which
-functions are getting hard to work with.
+**lspf-analysis** is a language server that reports code health for functions
+and classes while you type.
 
 It computes code metrics with a tree-sitter-based engine forked from
 [rust-code-analysis](https://github.com/mozilla/rust-code-analysis), scores
@@ -432,7 +432,7 @@ The answer is `null` for a document the server has not analyzed. This is a
 request rather than another field on `fileHealth` because that notification
 is pushed on every keystroke, while the breakdown is an order of magnitude
 more JSON that only a client with a view open has any use for. The VS Code
-extension pulls it for its Function Health tree.
+extension pulls it for its Code Health tree.
 
 ### Configuration
 

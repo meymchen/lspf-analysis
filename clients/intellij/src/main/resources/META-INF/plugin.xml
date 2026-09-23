@@ -5,11 +5,11 @@
   <vendor url="https://github.com/meymchen/lspf-analysis">meymchen</vendor>
 
   <description><![CDATA[
-    <p>Tells you, while you type, which functions are getting hard to work with.</p>
+    <p>Code health analysis for functions and classes, updated while you type.</p>
     <p>Hovering the gutter icon beside a function or class shows its measurements,
     while hovering its name keeps the IDE's original documentation. A function below the quality
     threshold gets a warning on its signature line. The status bar carries the file as
-    a whole, and the <b>Function Health</b> tool window lists every function at once,
+    a whole, and the <b>Code Health</b> tool window lists every function at once,
     worst first, down to the individual measure that set each pillar.</p>
     <p>Supported languages: C++, Java, JavaScript, Python, Rust, TypeScript, TSX.</p>
   ]]></description>
@@ -29,6 +29,7 @@
     <postStartupActivity
       implementation="com.github.meymchen.lspfanalysis.LspfAnalysisStartup"/>
 
+    <!-- Keep the ID for saved layouts; localize the name via toolwindow.stripe.Function_Health. -->
     <toolWindow id="Function Health"
                 anchor="right"
                 icon="com.github.meymchen.lspfanalysis.LspfAnalysisIcons.Logo"
@@ -53,7 +54,7 @@
             class="com.github.meymchen.lspfanalysis.ui.RestartServerAction"
             icon="AllIcons.Actions.Restart"/>
 
-    <!-- Shown in the Function Health toolbar, one at a time: whichever order
+    <!-- Shown in the Code Health toolbar, one at a time: whichever order
          the view is not currently in. -->
     <action id="LspfAnalysis.SortByQuality"
             class="com.github.meymchen.lspfanalysis.ui.SortByQualityAction"
