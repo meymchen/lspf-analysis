@@ -75,7 +75,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: package-lock.json
-      - run: npm ci
+      # No dependency needs an install script; skipping them keeps a compromised
+      # package from running code at install time.
+      - run: npm ci --ignore-scripts
       - name: Prettier and markdownlint
         run: npm run format:check
       - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
@@ -164,7 +166,9 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: clients/vscode/package-lock.json
-      - run: npm ci
+      # No dependency needs an install script; skipping them keeps a compromised
+      # package from running code at install time.
+      - run: npm ci --ignore-scripts
       - run: npm test
       # The bundle and the real-server transport test do not vary by platform,
       # and the latter needs a server build.
