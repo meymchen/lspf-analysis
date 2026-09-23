@@ -2,7 +2,7 @@ import * as assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
-  GO_TO_FUNCTION_COMMAND,
+  GO_TO_SOURCE_COMMAND,
   bar,
   icon,
   isFileHealth,
@@ -89,7 +89,7 @@ test('each worst function links to its line', () => {
   assert.match(tooltip, /weakest interface \(parameters\)/);
   const encoded = encodeURIComponent(JSON.stringify(['file:///a.rs', 12]));
   assert.ok(
-    tooltip.includes(`command:${GO_TO_FUNCTION_COMMAND}?${encoded}`),
+    tooltip.includes(`command:${GO_TO_SOURCE_COMMAND}?${encoded}`),
     `no go-to link in:\n${tooltip}`,
   );
 });
