@@ -3,6 +3,14 @@
 [default.extend-identifiers]
 
 [default.extend-words]
+# IntelliJ's look-and-feel API: LafManager, LafManagerListener.
+laf = "laf"
+# The prefix in "mis-setting".
+mis = "mis"
+# A standard spelling, not a misspelling of "unparsable".
+unparseable = "unparseable"
+# Parameter names in node.rs and cognitive.rs, the plural of `typ`.
+typs = "typs"
 
 [files]
 extend-exclude = ["crates/lspf-analysis-core/src/languages/"]

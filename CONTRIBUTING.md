@@ -59,4 +59,5 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-The local pre-commit hooks and the Rust formatting workflow check formatting.
+The local pre-commit hooks and the CI workflow run these checks. The audit
+workflow runs `cargo deny check` against `deny.toml` when dependencies change.

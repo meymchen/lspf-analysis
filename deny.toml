@@ -1,0 +1,32 @@
+# cargo-deny policy for the workspace and for the grammar generator in enums/.
+# Run with `cargo deny check`; the audit workflow and the audit pre-commit hook
+# both read this file.
+
+[advisories]
+ignore = []
+
+[licenses]
+# Every license a dependency actually needs. A crate offering a choice, such as
+# `MIT OR Apache-2.0`, is satisfied by any one of them, so licenses that only
+# ever appear as an alternative stay off this list.
+allow = ["Apache-2.0", "MIT", "MIT-0", "MPL-2.0", "Unicode-3.0", "Zlib"]
+confidence-threshold = 0.8
+# One list serves both dependency graphs, and enums/ needs fewer licenses.
+unused-allowed-license = "allow"
+
+# enums/ is an unpublished generator with no license field of its own.
+[licenses.private]
+ignore = true
+
+[bans]
+# Transitive dependencies still pull in two majors of crates such as syn and
+# hashbrown, which only upstream can fix. Report duplicates without failing.
+multiple-versions = "warn"
+wildcards = "deny"
+# Workspace members depend on each other by path and version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

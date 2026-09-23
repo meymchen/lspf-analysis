@@ -1,0 +1,257 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pull requests keep only their latest run. Runs on main always finish, so
+# every commit there gets a complete result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Decides which components a pull request touches. Every other event runs
+  # everything, so main always has a full baseline.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
+      vscode: ${{ github.event_name != 'pull_request' || steps.filter.outputs.vscode == 'true' }}
+      intellij: ${{ github.event_name != 'pull_request' || steps.filter.outputs.intellij == 'true' }}
+      vs: ${{ github.event_name != 'pull_request' || steps.filter.outputs.vs == 'true' }}
+    steps:
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          # The clients that start the real server also depend on the Rust paths.
+          filters: |
+            workflow: &workflow
+              - .github/workflows/ci.yml
+            rust: &rust
+              - *workflow
+              - "crates/**"
+              - "enums/**"
+              - Cargo.toml
+              - Cargo.lock
+              - rust-toolchain.toml
+              - rustfmt.toml
+            vscode:
+              - *rust
+              - "clients/vscode/**"
+            intellij:
+              - *workflow
+              - "clients/intellij/**"
+            vs:
+              - *rust
+              - "clients/vs/**"
+              - lspf-analysis.sln
+
+  # Repository-wide formatting, spelling, and the workflows themselves. Cheap
+  # enough to run on every change.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - name: Prettier and markdownlint
+        run: npm run format:check
+      - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: taplo@0.10.0,typos@1.50.2,zizmor@1.30.1
+      - run: taplo format --check
+      - run: typos
+      - name: actionlint
+        uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # 1.7.12
+        with:
+          args: -color
+      - name: zizmor
+        run: zizmor --format=github .
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  rust-lint:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Installs the channel and components pinned in rust-toolchain.toml.
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            . -> target
+            enums -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Format (workspace)
+        run: cargo fmt --all -- --check
+      - name: Format (enums)
+        run: cargo fmt --manifest-path enums/Cargo.toml -- --check
+      - name: Clippy (workspace)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Clippy (enums)
+        run: cargo clippy --manifest-path enums/Cargo.toml --all-targets --locked -- -D warnings
+
+  rust-test:
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo test --workspace --locked
+
+  vscode:
+    needs: changes
+    if: needs.changes.outputs.vscode == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: clients/vscode/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # The bundle and the real-server transport test do not vary by platform,
+      # and the latter needs a server build.
+      - if: runner.os == 'Linux'
+        run: npm run bundle
+      - if: runner.os == 'Linux'
+        run: rustup toolchain install
+      - if: runner.os == 'Linux'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - if: runner.os == 'Linux'
+        run: npm run test:debug-transport
+
+  intellij:
+    needs: changes
+    if: needs.changes.outputs.intellij == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: clients/intellij
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 21
+      # Validates the wrapper jar, and caches the Gradle user home, which is
+      # also where the IntelliJ Platform plugin keeps the downloaded IDE.
+      - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+      # verifyPlugin and buildPlugin cross-build a Windows server, so they are
+      # left to a Windows release job.
+      - run: ./gradlew ktlintCheck test
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: intellij-test-reports
+          path: clients/intellij/build/reports/tests
+
+  # The extension builds only on Windows. The Test-*.ps1 scripts drive an open
+  # experimental instance of Visual Studio, so only the console smoke tests run.
+  vs:
+    needs: changes
+    if: needs.changes.outputs.vs == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    # MSYS would rewrite /switch arguments into paths, so msbuild gets -switch.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
+      # Also builds the debug server that the smoke tests start.
+      - name: Build the extension
+        run: msbuild lspf-analysis.sln -restore -p:Configuration=Debug -p:DeployExtension=false -v:minimal
+      - name: Build the smoke tests
+        run: |
+          for project in HealthSmoke HealthThemeSmoke TcpTransportSmoke; do
+            msbuild "clients/vs/tests/$project.csproj" -restore -v:minimal
+          done
+      - run: clients/vs/tests/bin/HealthTheme/net48/HealthThemeSmoke.exe
+      - run: clients/vs/tests/bin/Debug/net48/TcpTransportSmoke.exe
+      - run: clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe
+      - run: clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe target/debug/lspf-analysis.exe --ws
+
+  # The single required check. Skipped jobs count as passing; a failed or
+  # cancelled one fails it.
+  ci-ok:
+    if: always()
+    needs: [changes, lint, rust-lint, rust-test, vscode, intellij, vs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

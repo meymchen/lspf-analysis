@@ -3,6 +3,8 @@ name = "enums"
 version = "0.0.1"
 authors = ["Calixte Denizet <cdenizet@mozilla.com>"]
 edition = "2024"
+# A code generator run from this repository, never published.
+publish = false
 
 # Its own workspace, so it cannot inherit the root's lints. Same reason: the
 # grammar crates export their tree_sitter_* entry points, and MSVC's link.exe
