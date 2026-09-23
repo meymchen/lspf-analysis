@@ -3,9 +3,20 @@
   "displayName": "%displayName%",
   "description": "%description%",
   "version": "0.1.0",
+  "preview": true,
   "publisher": "meymchen",
+  "author": {
+    "name": "Yuming Chen"
+  },
   "private": true,
   "license": "MPL-2.0",
+  "icon": "images/icon.png",
+  "homepage": "https://github.com/meymchen/lspf-analysis/tree/main/clients/vscode#readme",
+  "pricing": "Free",
+  "galleryBanner": {
+    "color": "#191d23",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/meymchen/lspf-analysis.git",
@@ -22,10 +33,19 @@
     "Linters"
   ],
   "keywords": [
-    "complexity",
+    "code health",
     "code quality",
+    "cognitive complexity",
+    "cyclomatic complexity",
+    "static analysis",
     "metrics",
-    "language server"
+    "language server",
+    "C++",
+    "Java",
+    "JavaScript",
+    "Python",
+    "Rust",
+    "TypeScript"
   ],
   "extensionKind": [
     "workspace"
@@ -50,8 +70,8 @@
         "category": "%command.category%"
       },
       {
-        "command": "lspfAnalysis.goToFunction",
-        "title": "%command.goToFunction.title%",
+        "command": "lspfAnalysis.goToSource",
+        "title": "%command.goToSource.title%",
         "category": "%command.category%"
       },
       {
@@ -70,8 +90,8 @@
     "views": {
       "explorer": [
         {
-          "id": "lspfAnalysis.functions",
-          "name": "%view.functions.name%",
+          "id": "lspfAnalysis.codeHealth",
+          "name": "%view.codeHealth.name%",
           "icon": "$(pulse)",
           "visibility": "collapsed"
         }
@@ -79,26 +99,26 @@
     },
     "viewsWelcome": [
       {
-        "view": "lspfAnalysis.functions",
-        "contents": "%viewsWelcome.functions%"
+        "view": "lspfAnalysis.codeHealth",
+        "contents": "%viewsWelcome.codeHealth%"
       }
     ],
     "menus": {
       "commandPalette": [
         {
-          "command": "lspfAnalysis.goToFunction",
+          "command": "lspfAnalysis.goToSource",
           "when": "false"
         }
       ],
       "view/title": [
         {
           "command": "lspfAnalysis.sortByQuality",
-          "when": "view == lspfAnalysis.functions && lspfAnalysis.sort == position",
+          "when": "view == lspfAnalysis.codeHealth && lspfAnalysis.sort == position",
           "group": "navigation"
         },
         {
           "command": "lspfAnalysis.sortByPosition",
-          "when": "view == lspfAnalysis.functions && lspfAnalysis.sort == quality",
+          "when": "view == lspfAnalysis.codeHealth && lspfAnalysis.sort == quality",
           "group": "navigation"
         }
       ]
@@ -253,6 +273,8 @@
     "watch": "node esbuild.mjs --watch",
     "prepare:server": "node scripts/prepareServer.mjs",
     "package": "node scripts/package.mjs",
+    "package:pre-release": "node scripts/package.mjs --pre-release",
+    "publish:pre-release": "vsce publish --pre-release --packagePath",
     "vscode:prepublish": "npm run bundle"
   },
   "dependencies": {

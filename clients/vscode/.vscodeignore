@@ -9,3 +9,6 @@ scripts/**
 src/**
 test/**
 tsconfig.json
+.gitignore
+.prettierignore
+PUBLISHING.md

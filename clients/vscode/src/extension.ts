@@ -43,7 +43,7 @@ import { t, useTranslator } from './i18n.js';
 import { SERVER_ARGS, describeMissingServer, resolveServerBinary } from './serverPath.js';
 import {
   FILE_HEALTH_METHOD,
-  GO_TO_FUNCTION_COMMAND,
+  GO_TO_SOURCE_COMMAND,
   isFileHealth,
   renderStatus,
   type FileHealth,
@@ -61,7 +61,7 @@ const SECTION = 'lspfAnalysis';
  * server cannot smuggle an arbitrary command link into a hover.
  */
 const ENABLED_COMMANDS = [
-  GO_TO_FUNCTION_COMMAND,
+  GO_TO_SOURCE_COMMAND,
   `${SECTION}.restartServer`,
   'workbench.actions.view.problems',
   'workbench.action.openSettings',
@@ -85,7 +85,7 @@ const LANGUAGES = [
 ];
 
 /** The view id the tree is contributed under, matching `package.json`. */
-const FUNCTIONS_VIEW = `${SECTION}.functions`;
+const CODE_HEALTH_VIEW = `${SECTION}.codeHealth`;
 
 let client: LanguageClient | undefined;
 let outputChannel: import('vscode').OutputChannel;
@@ -189,7 +189,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push(
     statusItem,
     tree,
-    window.createTreeView(FUNCTIONS_VIEW, {
+    window.createTreeView(CODE_HEALTH_VIEW, {
       treeDataProvider: tree,
       showCollapseAll: true,
     }),
@@ -205,7 +205,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
         await start(context);
       }
     }),
-    commands.registerCommand(GO_TO_FUNCTION_COMMAND, goToFunction),
+    commands.registerCommand(GO_TO_SOURCE_COMMAND, goToSource),
     window.onDidChangeActiveTextEditor(() => {
       refreshStatus();
       tree?.refresh();
@@ -232,7 +232,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 }
 
 /** Opens `uri` with the cursor on a 1-based `line`. */
-async function goToFunction(uri: string, line: number): Promise<void> {
+async function goToSource(uri: string, line: number): Promise<void> {
   const document = await workspace.openTextDocument(Uri.parse(uri));
   const editor = await window.showTextDocument(document, {
     viewColumn: ViewColumn.Active,

@@ -34,8 +34,8 @@ import {
   type Pillar,
   type Sort,
 } from './functions.js';
-import { functionLabel, measureLabel, pillarLabel } from './i18n.js';
-import { GO_TO_FUNCTION_COMMAND, type FileHealth } from './status.js';
+import { functionLabel, measureLabel, pillarLabel, t } from './i18n.js';
+import { GO_TO_SOURCE_COMMAND, type FileHealth } from './status.js';
 
 /**
  * One row of the tree.
@@ -222,8 +222,8 @@ function functionItem(node: Node & { kind: 'function' }): TreeItem {
   item.tooltip = markdown(functionTooltip(node.detail));
   item.contextValue = 'lspfAnalysis.function';
   item.command = {
-    command: GO_TO_FUNCTION_COMMAND,
-    title: 'Go to Function',
+    command: GO_TO_SOURCE_COMMAND,
+    title: t('Go to Source'),
     arguments: [node.uri, node.detail.startLine],
   };
   return item;

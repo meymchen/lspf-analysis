@@ -34,6 +34,9 @@ export function parseArguments(argv) {
       options.skipBuild = true;
     } else if (argument === '--target') {
       options.target = argv[index + 1];
+      if (!options.target || options.target.startsWith('--')) {
+        throw new Error('--target requires a platform, for example win32-x64');
+      }
       index += 1;
     } else if (argument.startsWith('--target=')) {
       options.target = argument.slice('--target='.length);
@@ -44,6 +47,7 @@ export function parseArguments(argv) {
   if (options.target === undefined) {
     options.target = hostVscodeTarget();
   }
+  rustTarget(options.target);
   return options;
 }
 
@@ -51,7 +55,6 @@ function run(command, args, cwd) {
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
   });
   if (result.error) {
     throw result.error;
@@ -82,7 +85,7 @@ export async function prepareServer({ target, skipBuild }) {
     try {
       run(
         'cargo',
-        ['build', '--release', '--package', 'lspf-analysis', '--target', triple],
+        ['build', '--locked', '--release', '--package', 'lspf-analysis', '--target', triple],
         repositoryRoot,
       );
     } catch (error) {

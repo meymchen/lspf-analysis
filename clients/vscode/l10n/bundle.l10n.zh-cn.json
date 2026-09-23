@@ -26,6 +26,7 @@
   "{0} functions, {1} below the warning threshold.": "共 {0} 个函数，其中 {1} 个低于警告阈值。",
   "Worth opening first": "建议优先查看",
   "Go to line {0}": "跳转到第 {0} 行",
+  "Go to Source": "跳转到源码",
   "**{0}%**, weakest {1}": "**{0}%**，最弱 {1}",
   "**{0}%**, weakest {1} ({2})": "**{0}%**，最弱 {1}（{2}）",
 

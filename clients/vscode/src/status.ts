@@ -3,8 +3,8 @@ import { functionLabel, gradeLabel, measureLabel, pillarLabel, t } from './i18n.
 /** The `lspfAnalysis/fileHealth` notification the server pushes per file. */
 export const FILE_HEALTH_METHOD = 'lspfAnalysis/fileHealth';
 
-/** Reveals a function the tooltip lists. Registered by the extension. */
-export const GO_TO_FUNCTION_COMMAND = 'lspfAnalysis.goToFunction';
+/** Opens a source location. Registered by the extension. */
+export const GO_TO_SOURCE_COMMAND = 'lspfAnalysis.goToSource';
 
 export interface WorstFunction {
   name: string;
@@ -159,7 +159,7 @@ export function renderStatus(health: FileHealth): StatusText {
   if (health.worst.length > 0) {
     lines.push('', '---', '', `**${t('Worth opening first')}**`, '');
     for (const worst of health.worst) {
-      const link = commandLink(GO_TO_FUNCTION_COMMAND, [health.uri, worst.line]);
+      const link = commandLink(GO_TO_SOURCE_COMMAND, [health.uri, worst.line]);
       const title = t('Go to line {0}', worst.line);
       // The score and the verdict are one source string, so that the
       // punctuation between them belongs to the language it is read in

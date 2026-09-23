@@ -21,13 +21,12 @@ export function vscodeTargets() {
 
 /** Returns the Rust triple for a VS Code target, or throws if unsupported. */
 export function rustTarget(vscodeTarget) {
-  const triple = targets[vscodeTarget];
-  if (!triple) {
+  if (!Object.hasOwn(targets, vscodeTarget)) {
     throw new Error(
       `unsupported target ${vscodeTarget}; expected one of ${vscodeTargets().join(', ')}`,
     );
   }
-  return triple;
+  return targets[vscodeTarget];
 }
 
 /**

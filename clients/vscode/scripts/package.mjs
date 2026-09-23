@@ -4,25 +4,41 @@
 // With no `--target` this packages for the machine it runs on, which is the
 // common case while developing. `vsce` runs `vscode:prepublish`, so the
 // esbuild bundle is refreshed on the way through.
+// `--pre-release` marks the VSIX for the Marketplace pre-release channel.
 
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 import { extensionRoot, fail, parseArguments, prepareServer } from './prepareServer.mjs';
 
+const require = createRequire(import.meta.url);
+
 try {
-  const options = parseArguments(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const preRelease = argv.includes('--pre-release');
+  const options = parseArguments(argv.filter((argument) => argument !== '--pre-release'));
   await prepareServer(options);
 
   const manifest = JSON.parse(await readFile(path.join(extensionRoot, 'package.json'), 'utf8'));
-  const output = `${manifest.name}-${options.target}-${manifest.version}.vsix`;
+  const suffix = preRelease ? '-pre-release' : '';
+  const output = `${manifest.name}-${options.target}-${manifest.version}${suffix}.vsix`;
+  const args = [
+    require.resolve('@vscode/vsce/vsce'),
+    'package',
+    '--target',
+    options.target,
+    '--no-dependencies',
+    '--out',
+    output,
+  ];
+  if (preRelease) {
+    args.push('--pre-release');
+  }
 
-  const result = spawnSync(
-    'npx',
-    ['vsce', 'package', '--target', options.target, '--no-dependencies', '--out', output],
-    { cwd: extensionRoot, stdio: 'inherit', shell: process.platform === 'win32' },
-  );
+  // Run the locked local CLI through Node without a shell, including on Windows.
+  const result = spawnSync(process.execPath, args, { cwd: extensionRoot, stdio: 'inherit' });
   if (result.error) {
     throw result.error;
   }
