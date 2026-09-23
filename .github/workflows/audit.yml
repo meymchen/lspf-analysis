@@ -1,0 +1,69 @@
+name: Audit
+
+# Not a required check: a new advisory against an existing dependency should
+# not block unrelated pull requests. The weekly run catches advisories
+# published after the dependency was added.
+on:
+  pull_request:
+    paths: &paths
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+      - deny.toml
+      - .github/workflows/audit.yml
+  push:
+    branches: [main]
+    paths: *paths
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Advisories, licenses, duplicate crates and sources, as set in deny.toml.
+  deny:
+    strategy:
+      fail-fast: false
+      matrix:
+        manifest: [Cargo.toml, enums/Cargo.toml]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: cargo-deny@0.20.2
+      - run: cargo deny --manifest-path "${MANIFEST}" check
+        env:
+          MANIFEST: ${{ matrix.manifest }}
+
+  # Unused dependencies. Needs nightly, so it runs only on the weekly schedule
+  # or on demand, where a nightly breakage cannot block anyone.
+  udeps:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install nightly --profile minimal
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        with:
+          tool: cargo-udeps@0.1.61
+      - run: cargo +nightly udeps --workspace --all-targets --locked

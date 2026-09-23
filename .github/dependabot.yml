@@ -1,17 +1,70 @@
 version: 2
+
+# Every ecosystem gets one grouped pull request for minor and patch updates
+# each week; a major update opens a pull request of its own. The cooldown
+# keeps a release out until it has been public for a week, long enough for a
+# broken or malicious publish to be noticed and yanked. Security updates
+# ignore both the grouping and the cooldown.
 updates:
-  - package-ecosystem: cargo
+  - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 99
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: cargo
-    directory: "/enums"
+    # enums is its own workspace with its own lockfile.
+    directories: ["/", "/enums"]
     schedule:
       interval: weekly
-    open-pull-requests-limit: 99
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
   - package-ecosystem: npm
-    directory: "/clients/vscode"
+    # The root package holds the repository's formatters.
+    directories: ["/", "/clients/vscode"]
     schedule:
       interval: weekly
-    open-pull-requests-limit: 99
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Tracks engines.vscode, the oldest VS Code the extension supports. vsce
+      # rejects typings newer than that, so it moves only with the engine.
+      - dependency-name: "@types/vscode"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: gradle
+    directory: "/clients/intellij"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: nuget
+    directories: ["/clients/vs", "/clients/vs/tests"]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]

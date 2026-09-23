@@ -3,11 +3,21 @@
 repos:
   - repo: local
     hooks:
-      - id: audit
-        name: audit
+      # Reads deny.toml, the same policy the audit workflow applies.
+      - id: deny
+        name: cargo deny (workspace)
         language: system
-        files: 'Cargo\.lock|Cargo\.toml$'
-        entry: cargo audit
+        files: '(^|/)Cargo\.(lock|toml)$|^deny\.toml$'
+        exclude: "^enums/"
+        entry: cargo deny check
+        pass_filenames: false
+
+      # enums is excluded from the root Cargo workspace.
+      - id: deny-enums
+        name: cargo deny (enums)
+        language: system
+        files: '^enums/Cargo\.(lock|toml)$|^deny\.toml$'
+        entry: cargo deny --manifest-path enums/Cargo.toml check
         pass_filenames: false
 
 default_language_version:

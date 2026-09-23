@@ -23,7 +23,7 @@ clap.workspace = true
 globset.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_cbor = "^0.11"
+ciborium = "^0.2"
 # default features are the upstream TUI/CLI, which we do not want linked in.
 toon-format = { version = "^0.5", default-features = false }
 tokio = { workspace = true, features = ["sync", "time"] }

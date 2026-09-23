@@ -194,7 +194,7 @@ impl WriteFile for Cbor {
     const EXTENSION: &'static str = ".cbor";
 
     fn with_writer<T: Serialize>(content: T, path: PathBuf, output_path: &Path) {
-        serde_cbor::to_writer(Self::open_file(path, output_path), &content).unwrap()
+        ciborium::into_writer(&content, Self::open_file(path, output_path)).unwrap()
     }
 }
 
@@ -278,6 +278,25 @@ mod tests {
 
         let written = read_to_string(output.join("src/deep/hover.rs.toon")).unwrap();
         assert_eq!(written, Toon::format(a_pillar()) + "\n");
+        remove_dir_all(&output).unwrap();
+    }
+
+    #[test]
+    fn dumping_cbor_writes_a_file_that_decodes_to_the_same_values() {
+        let output = std::env::temp_dir().join("lspf_analysis_cbor_dump");
+        let _ = remove_dir_all(&output);
+        create_dir_all(&output).unwrap();
+
+        Format::Cbor.dump_formats(
+            a_pillar(),
+            PathBuf::from("/src/deep/hover.rs"),
+            Some(&output),
+            false,
+        );
+
+        let file = File::open(output.join("src/deep/hover.rs.cbor")).unwrap();
+        let decoded: serde_json::Value = ciborium::from_reader(file).unwrap();
+        assert_eq!(decoded, serde_json::to_value(a_pillar()).unwrap());
         remove_dir_all(&output).unwrap();
     }
 }
