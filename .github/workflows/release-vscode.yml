@@ -1,0 +1,288 @@
+name: Release VS Code extension
+
+# A vscode-v<version> tag builds every platform VSIX, publishes them to the
+# Visual Studio Marketplace and Open VSX, and attaches them to a GitHub
+# release. A pull request that changes the packaging, or a manual run, only
+# builds, so the pipeline is proven before a tag depends on it.
+on:
+  push:
+    tags: ["vscode-v*"]
+  pull_request:
+    paths:
+      - .github/workflows/release-vscode.yml
+      - clients/vscode/.vscodeignore
+      - clients/vscode/scripts/**
+  workflow_dispatch:
+
+# A release always finishes; it must not be cancelled halfway through
+# publishing.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+# No job here restores a cache: a release must not be built from anything a
+# pull request could have written.
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      pre-release: ${{ steps.version.outputs.pre-release }}
+    defaults:
+      run:
+        working-directory: clients/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The whole history, to check the tag against main.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      # Marketplace convention: an odd minor version is a pre-release, an even
+      # one is stable.
+      - id: version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          minor=$(echo "${version}" | cut -d. -f2)
+          if [ $((minor % 2)) -eq 1 ]; then pre_release=true; else pre_release=false; fi
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            if [ "${GITHUB_REF_NAME}" != "vscode-v${version}" ]; then
+              echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+              exit 1
+            fi
+            if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+              echo "::error::tag ${GITHUB_REF_NAME} is not on main"
+              exit 1
+            fi
+          fi
+          heading=$(grep -m1 -E "^## ${version//./\\.}( |$)" CHANGELOG.md || true)
+          if [ -z "${heading}" ]; then
+            echo "::error::CHANGELOG.md has no entry for ${version}"
+            exit 1
+          fi
+          if echo "${heading}" | grep -qi unreleased; then
+            echo "::error::the CHANGELOG.md entry for ${version} is still marked unreleased"
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "pre-release=${pre_release}" >> "${GITHUB_OUTPUT}"
+          echo "${version}, pre-release: ${pre_release}"
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  # One VSIX per VS Code target. Each runner builds natively where GitHub
+  # has a runner for it, so the packaged server can be started as a check;
+  # the rest cross-compile.
+  build:
+    needs: verify
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: win32-x64
+            runner: windows-latest
+            targets: win32-x64
+            native: true
+          - name: win32-arm64
+            runner: windows-latest
+            targets: win32-arm64
+            native: false
+          - name: darwin-arm64
+            runner: macos-latest
+            targets: darwin-arm64
+            native: true
+          - name: darwin-x64
+            runner: macos-latest
+            targets: darwin-x64
+            native: false
+          - name: linux-x64
+            runner: ubuntu-latest
+            targets: linux-x64 alpine-x64
+            native: true
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            targets: linux-arm64 alpine-arm64
+            native: true
+    name: build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: clients/vscode
+    env:
+      TARGETS: ${{ matrix.targets }}
+      PRE_RELEASE: ${{ needs.verify.outputs.pre-release }}
+      # The tree-sitter grammars are C and must be compiled against musl
+      # too. The cc crate finds musl-gcc for x86_64 on its own but looks for
+      # a cross compiler for aarch64, which a native runner does not have.
+      CC_x86_64_unknown_linux_musl: musl-gcc
+      CC_aarch64_unknown_linux_musl: musl-gcc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes --no-install-recommends musl-tools
+      - name: Install the Rust toolchain and targets
+        run: |
+          rustup toolchain install
+          for target in ${TARGETS}; do
+            rustup target add "$(node --input-type=module -e "
+              import { rustTarget } from './scripts/targets.mjs';
+              console.log(rustTarget(process.argv[1]));
+            " "${target}")"
+          done
+      - run: npm ci --ignore-scripts
+      - name: Package
+        run: |
+          flags=()
+          if [ "${PRE_RELEASE}" = true ]; then flags+=(--pre-release); fi
+          for target in ${TARGETS}; do
+            node scripts/package.mjs --target "${target}" "${flags[@]}"
+          done
+      # Starts the server from inside each package, which also proves the
+      # executable bit survived packaging.
+      - if: matrix.native
+        name: Smoke test
+        run: |
+          for vsix in *.vsix; do
+            rm -rf smoke
+            unzip -q "${vsix}" 'extension/server/*' -d smoke
+            for server in smoke/extension/server/*; do
+              "./${server}" --version
+            done
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vsix-${{ matrix.name }}
+          path: clients/vscode/*.vsix
+          if-no-files-found: error
+
+  # Uploads every platform in one call, authenticated through Microsoft Entra
+  # ID with no stored secret: azure/login exchanges the job's OIDC token, and
+  # vsce picks up the Azure CLI session. --skip-duplicate lets a failed run be
+  # retried after some platforms were already accepted.
+  marketplace:
+    needs: [verify, build]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: vscode-release
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: clients/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vsix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/vsix
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+      - run: npx vsce publish --azure-credential --skip-duplicate --packagePath "${RUNNER_TEMP}"/vsix/*.vsix
+
+  # With OVSX_PAT set, ovsx publishes with that token. Without it, ovsx
+  # exchanges the job's OIDC token through Open VSX trusted publishing, which
+  # can only be registered once the extension has a published version.
+  open-vsx:
+    needs: [verify, build]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: vscode-release
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: clients/vscode
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci --ignore-scripts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vsix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/vsix
+      - run: npx ovsx publish --skip-duplicate --packagePath "${RUNNER_TEMP}"/vsix/*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  # Created last, so a release on GitHub means the extension is live in both
+  # registries. The notes are the version's changelog entry.
+  github-release:
+    needs: [verify, marketplace, open-vsx]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vsix-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/vsix
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ runner.temp }}/vsix/*.vsix
+      - run: |
+          awk -v version="${VERSION}" '
+            $1 == "##" && $2 == version { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' clients/vscode/CHANGELOG.md > "${RUNNER_TEMP}/notes.md"
+          flags=()
+          if [ "${PRE_RELEASE}" = true ]; then flags+=(--prerelease); fi
+          gh release create "${GITHUB_REF_NAME}" "${RUNNER_TEMP}"/vsix/*.vsix \
+            --verify-tag \
+            --title "VS Code extension ${VERSION}" \
+            --notes-file "${RUNNER_TEMP}/notes.md" \
+            "${flags[@]}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          PRE_RELEASE: ${{ needs.verify.outputs.pre-release }}

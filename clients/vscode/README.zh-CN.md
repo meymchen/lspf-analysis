@@ -97,9 +97,9 @@ Java 类健康度使用类加权方法数、公开方法数和公开属性数。
 
 ## 平台支持
 
-打包目标包括 Windows、macOS 和 Linux，各自提供 x64 与 ARM64 版本。
+打包目标包括 Windows、macOS、Linux 和 Alpine Linux，各自提供 x64 与 ARM64 版本。
 手动安装时，应选择与扩展运行环境的操作系统和架构对应的 VSIX。
-Linux 包面向 GNU/Linux，不适用于 Alpine/musl。
+Linux 版语言服务器静态链接 musl，不依赖发行版的 glibc 版本。
 扩展依赖本地语言服务器，无法直接在 vscode.dev 的浏览器环境中运行。
 
 ## 获取帮助
@@ -128,9 +128,10 @@ npm run package -- --target darwin-arm64
 ```
 
 可用目标包括 `win32-x64`、`win32-arm64`、`darwin-x64`、`darwin-arm64`、
-`linux-x64` 和 `linux-arm64`。
+`linux-x64`、`linux-arm64`、`alpine-x64` 和 `alpine-arm64`。
 跨平台编译需要对应的 Rust 目标，以及该目标的 C 工具链和链接器，
 因为 tree-sitter 语法解析器使用 C。
+Linux 与 Alpine 目标使用 `musl-gcc` 构建，在 Debian 和 Ubuntu 上由 `musl-tools` 包提供。
 构建完成后，通过“扩展 → … → 从 VSIX 安装”选择生成的文件。
 
 预览包使用 `npm run package:pre-release` 构建。
