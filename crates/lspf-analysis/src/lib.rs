@@ -101,7 +101,7 @@ async fn report_for(
     let document = ctx.documents().get(uri)?;
     let path = uri_to_path(uri);
     let language = language_for(document.language_id(), &path)?;
-    let text = document.text();
+    let text = document.text(None).into_owned();
     let version = document.version();
 
     state
@@ -127,7 +127,7 @@ async fn publish(state: &State, ctx: ServerContext, uri: Uri, settings: Settings
         return;
     };
     if current.version() != analyzed.version
-        || current.text() != analyzed.text
+        || current.text(None) != analyzed.text
         || state.settings(&ctx) != settings
     {
         return;
