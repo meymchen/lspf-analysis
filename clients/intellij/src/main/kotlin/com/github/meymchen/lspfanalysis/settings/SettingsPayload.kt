@@ -94,8 +94,7 @@ private fun displayTheme(): JsonObject = JsonObject().apply {
  * whose digits or letter casing differ would produce a colour the server
  * reads as nothing, and the letters would silently lose their fitted palette.
  */
-private fun hex(color: Color): String =
-    String.format(Locale.ROOT, "#%02x%02x%02x", color.red, color.green, color.blue)
+private fun hex(color: Color): String = String.format(Locale.ROOT, "#%02x%02x%02x", color.red, color.green, color.blue)
 
 /**
  * The IDE's display language as a tag the server understands.

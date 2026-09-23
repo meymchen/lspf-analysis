@@ -201,8 +201,8 @@ jobs:
       # also where the IntelliJ Platform plugin keeps the downloaded IDE.
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       # verifyPlugin and buildPlugin cross-build a Windows server, so they are
-      # left to a Windows release job.
-      - run: ./gradlew ktlintCheck test
+      # left to a Windows release job. --continue reports lint and tests together.
+      - run: ./gradlew --continue ktlintCheck test
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -218,10 +218,6 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: read
-    # MSYS would rewrite /switch arguments into paths, so msbuild gets -switch.
-    defaults:
-      run:
-        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -233,16 +229,17 @@ jobs:
       - uses: microsoft/setup-msbuild@30375c66a4eea26614e0d39710365f22f8b0af57 # v3
       # Also builds the debug server that the smoke tests start.
       - name: Build the extension
-        run: msbuild lspf-analysis.sln -restore -p:Configuration=Debug -p:DeployExtension=false -v:minimal
+        run: msbuild lspf-analysis.sln /restore /p:Configuration=Debug /p:DeployExtension=false /v:minimal
       - name: Build the smoke tests
         run: |
-          for project in HealthSmoke HealthThemeSmoke TcpTransportSmoke; do
-            msbuild "clients/vs/tests/$project.csproj" -restore -v:minimal
-          done
-      - run: clients/vs/tests/bin/HealthTheme/net48/HealthThemeSmoke.exe
-      - run: clients/vs/tests/bin/Debug/net48/TcpTransportSmoke.exe
-      - run: clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe
-      - run: clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe target/debug/lspf-analysis.exe --ws
+          $PSNativeCommandUseErrorActionPreference = $true
+          foreach ($project in 'HealthSmoke', 'HealthThemeSmoke', 'TcpTransportSmoke') {
+            msbuild "clients/vs/tests/$project.csproj" /restore /v:minimal
+          }
+      - run: ./clients/vs/tests/bin/HealthTheme/net48/HealthThemeSmoke.exe
+      - run: ./clients/vs/tests/bin/Debug/net48/TcpTransportSmoke.exe
+      - run: ./clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe
+      - run: ./clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe target/debug/lspf-analysis.exe --ws
 
   # The single required check. Skipped jobs count as passing; a failed or
   # cancelled one fails it.
