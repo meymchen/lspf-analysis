@@ -103,9 +103,10 @@ links in the tree and status bar navigate directly to the corresponding line.
 
 ## Platform support
 
-Packages target Windows, macOS, and Linux, with separate x64 and ARM64
-binaries. Install the VSIX matching the operating system and architecture
-where the extension runs. Linux packages target GNU/Linux, not Alpine/musl.
+Packages target Windows, macOS, Linux, and Alpine Linux, with separate x64
+and ARM64 binaries. Install the VSIX matching the operating system and
+architecture where the extension runs. The Linux server is statically linked
+against musl, so it does not depend on the distribution's glibc version.
 The extension requires a native language server and does not run directly in
 the browser on vscode.dev.
 
@@ -135,8 +136,10 @@ npm run package -- --target darwin-arm64
 ```
 
 Targets: `win32-x64`, `win32-arm64`, `darwin-x64`, `darwin-arm64`,
-`linux-x64`, `linux-arm64`. Cross compilation needs the matching Rust target
-and a C toolchain and linker for it, since the tree-sitter grammars are C.
+`linux-x64`, `linux-arm64`, `alpine-x64`, `alpine-arm64`. Cross compilation
+needs the matching Rust target and a C toolchain and linker for it, since the
+tree-sitter grammars are C. Linux and Alpine targets build with `musl-gcc`,
+from the `musl-tools` package on Debian and Ubuntu.
 Install the resulting VSIX through **Extensions → … → Install from VSIX**.
 
 For a preview package, run `npm run package:pre-release` instead. See the
