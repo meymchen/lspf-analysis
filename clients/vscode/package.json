@@ -287,9 +287,9 @@
     "@types/vscode": "~1.106.0",
     "@types/ws": "^8.18.1",
     "@vscode/vsce": "^3.6.0",
-    "esbuild": "^0.25.0",
+    "esbuild": "^0.28.2",
     "ovsx": "^1.2.0",
-    "prettier": "3.9.6",
+    "prettier": "3.9.8",
     "typescript": "^5.9.0",
     "vscode-jsonrpc": "~8.2.1"
   }
