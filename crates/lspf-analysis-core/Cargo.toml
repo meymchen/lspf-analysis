@@ -21,7 +21,7 @@ workspace = true
 crossbeam = { version = "^0.8", features = ["crossbeam-channel"] }
 globset.workspace = true
 num = "^0.4"
-num-derive = "^0.4"
+num-derive = "^0.5"
 num-traits = "^0.2"
 petgraph = "^0.8"
 regex = "^1.7"
