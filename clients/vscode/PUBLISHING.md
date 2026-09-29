@@ -1,5 +1,7 @@
 # Publishing LSPF Analysis
 
+[English](PUBLISHING.md) · [简体中文](PUBLISHING.zh-CN.md)
+
 The extension is published as `meymchen.lspf-analysis` to the Visual Studio
 Marketplace and to Open VSX. The first release is version `0.1.0` on the
 pre-release channel.

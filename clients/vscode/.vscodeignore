@@ -12,3 +12,4 @@ tsconfig.json
 .gitignore
 .prettierignore
 PUBLISHING.md
+PUBLISHING.zh-CN.md
