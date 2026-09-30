@@ -30,5 +30,5 @@
   "config.diagnostics.file": "当整个文件的质量差到构成错误时，额外报告文件本身。",
   "config.statusBar.enabled": "在状态栏显示当前文件的整体质量。",
   "config.server.path": "改用这个 `lspf-analysis` 可执行文件，而不是扩展自带的那个。开头的 `~` 会被展开。",
-  "config.trace.server": "跟踪与语言服务器之间往来的消息。"
+  "config.trace.server": "跟踪与语言服务器往来消息的详细程度。LSPF Analysis 输出通道的日志级别为 Trace 时才会跟踪。"
 }

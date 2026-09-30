@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 
-import type { ExtensionContext, StatusBarItem } from 'vscode';
+import type { ExtensionContext, LogOutputChannel, StatusBarItem } from 'vscode';
 import {
   ExtensionMode,
   Hover,
@@ -32,7 +32,7 @@ import {
   debugServerPort,
   debugServerTransport,
 } from './debug.js';
-import { followServerLog } from './serverLog.js';
+import { followServerLog, forwardServerLog } from './serverLog.js';
 import {
   FUNCTION_HEALTH_METHOD,
   isFunctionHealth,
@@ -88,7 +88,7 @@ const LANGUAGES = [
 const CODE_HEALTH_VIEW = `${SECTION}.codeHealth`;
 
 let client: LanguageClient | undefined;
-let outputChannel: import('vscode').OutputChannel;
+let outputChannel: LogOutputChannel;
 
 /** The latest file summary per document, keyed by URI. */
 const reports = new Map<string, FileHealth>();
@@ -170,7 +170,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   // it was written in.
   useTranslator(l10n.t);
 
-  outputChannel = window.createOutputChannel('LSPF Analysis');
+  outputChannel = window.createOutputChannel('LSPF Analysis', { log: true });
   context.subscriptions.push(outputChannel);
   const debugLog = process.env.LSPF_ANALYSIS_DEBUG_LOG;
   if (debugServerPort(process.env) !== undefined && debugLog) {
@@ -355,6 +355,12 @@ async function start(context: ExtensionContext): Promise<void> {
     initializationOptions: { [SECTION]: settingsPayload() },
     outputChannel,
     traceOutputChannel: outputChannel,
+    // The client would log every stderr line as an error. The server tags
+    // each line with its level, so keep that instead.
+    stdioOptions: {
+      stdout: (input, channel) => forwardServerLog(input, channel, 'info'),
+      stderr: (input, channel) => forwardServerLog(input, channel, 'error'),
+    },
     // Advertises `general.markdown.allowedTags`, which is how the server
     // learns it may colour a grade letter with a `<span>`. A client that
     // does not say this gets the letter on its own, so the capability is

@@ -30,5 +30,5 @@
   "config.diagnostics.file": "Also report the file as a whole when its quality is bad enough to be an error.",
   "config.statusBar.enabled": "Show the active file's overall quality in the status bar.",
   "config.server.path": "Path to an `lspf-analysis` binary to use instead of the one packaged with this extension. A leading `~` is expanded.",
-  "config.trace.server": "Trace the messages exchanged with the language server."
+  "config.trace.server": "How much of each message exchanged with the language server to trace. Tracing is on while the LSPF Analysis output channel's log level is Trace."
 }

@@ -86,7 +86,10 @@ Control flow, size, and vocabulary load each default to `1`; interface and
 class design each default to `0.5`. Class design controls the contribution of
 Java classes to the file score.
 
-For troubleshooting, `lspfAnalysis.trace.server` enables protocol tracing.
+For troubleshooting, set the log level of the LSPF Analysis output channel to
+Trace with **Developer: Set Log Level**. This shows the server's debug logs and
+traces the protocol; `lspfAnalysis.trace.server` chooses between `messages`
+and `verbose`.
 `lspfAnalysis.server.path` selects a custom server binary; leave it empty to
 use the bundled server. Reload the window after changing this path.
 
