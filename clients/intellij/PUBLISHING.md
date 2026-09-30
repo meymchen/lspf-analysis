@@ -33,9 +33,12 @@ Marketplace plugin entry has been created. This bootstrap exception applies
 only to stable version `0.1.0`; later stable releases fail if it remains unset.
 
 Prepare the Marketplace listing with the existing XML ID
-`com.github.meymchen.lspfanalysis`, vendor, MPL-2.0 license, repository and issue
-links, description, screenshots, and supported platform range. The numeric
-Marketplace ID is assigned during the [first manual upload][first-upload].
+`com.github.meymchen.lspfanalysis`, the `Yuming Chen` vendor profile, MPL-2.0
+license, repository and issue links, description, screenshots, and supported
+platform range. The descriptor lists `https://ymchen.me` and
+`meymchen@outlook.com` as the vendor's contact details, and the GitHub repository
+as the plugin homepage. The numeric Marketplace ID is assigned during the
+[first manual upload][first-upload].
 
 ## Release sequence
 
@@ -59,12 +62,9 @@ Marketplace ID is assigned during the [first manual upload][first-upload].
 5. Update the version and changelog to `0.1.0` in another PR, merge it, and push
    `intellij-v0.1.0`. Its signed ZIPs appear on GitHub. The job summary explicitly
    reports that Marketplace has **not** been submitted during bootstrap.
-6. Upload a signed `0.1.0` ZIP from that GitHub release to create the Marketplace
-   entry. Use the exact saved artifact, not a local rebuild. Set the environment
-   variable `INTELLIJ_MARKETPLACE_READY` to `true`, then rerun the original
-   workflow to submit the remaining variants. If the manually uploaded update
-   cannot yet be downloaded for content comparison, wait for its review before
-   retrying. Never treat a duplicate-version error as success without proof.
+6. Follow [First Marketplace upload with six platform ZIPs](#first-marketplace-upload-with-six-platform-zips)
+   to create the Marketplace entry from a signed `0.1.0` ZIP, then submit the
+   remaining variants using the original workflow.
 
 For subsequent versions, `intellij-vX.Y.Z` publishes to GitHub and the default
 Marketplace channel. `intellij-vX.Y.Z-rc.N` publishes only to GitHub. An RC is
@@ -75,6 +75,41 @@ in `gradle.properties`.
 Pushing a tag authorizes signing and publication. There is no second approval.
 The workflow checks that the tag matches the declared version, has not moved,
 and resolves to a commit reachable from `origin/main`.
+
+## First Marketplace upload with six platform ZIPs
+
+All six archives belong to one Marketplace plugin entry with XML ID
+`com.github.meymchen.lspfanalysis`. Gradle's [native variants][native-variants]
+add an OS/architecture suffix to each descriptor's version and matching
+platform dependencies. For example, the Windows x64 package declares version
+`0.1.0-windows-x86_64`, while the macOS ARM64 package declares
+`0.1.0-mac-arm64`. Keep the six signed ZIPs as separate, unchanged files under
+that single entry.
+
+1. Wait for the `intellij-v0.1.0` GitHub release to contain all six signed ZIPs.
+   Download `lspf-analysis-0.1.0-windows-x86_64.zip` from that release for the
+   first upload. This choice matches the first variant processed by our
+   publisher; it does not limit the plugin entry to Windows. The existing RC
+   release is for installation testing and is not the first stable upload.
+2. On Marketplace, choose **Upload plugin**, select the **Yuming Chen** vendor
+   profile, and upload that one ZIP. Fill in the listing details and use the
+   default release channel. This creates the plugin entry and its numeric ID.
+3. Wait until the manually uploaded version is approved and downloadable. Our
+   publisher downloads it to compare its complete payload with the saved
+   release bundle. While it is unavailable, a rerun can stop with a duplicate
+   version error; that is not proof of a successful upload.
+4. In the GitHub `intellij-release` environment, set the **variable**
+   `INTELLIJ_MARKETPLACE_READY` to `true`. Open the original tag-triggered
+   `intellij-v0.1.0` Actions run and select **Re-run all jobs**. A new manual
+   **Run workflow** execution only builds and checks packages.
+5. The rerun reuses the saved signed bundle, verifies the existing Windows x64
+   update, and uploads Windows ARM64, macOS x64/ARM64, and Linux x64/ARM64 to the
+   same entry. Check the publisher dashboard for approval of all six variants.
+
+If uploading the remaining variants manually instead, use **Upload update**
+on that same plugin page for each signed ZIP, in the default channel. See
+[Plugin updates][plugin-updates]. Retain the platform suffixes and use the
+exact GitHub release files so a later workflow run can verify them.
 
 ## What must pass
 
@@ -186,3 +221,5 @@ distributed. The release inspector rejects it.
 
 [signing]: https://plugins.jetbrains.com/docs/intellij/plugin-signing.html
 [first-upload]: https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html
+[native-variants]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html#native-variants
+[plugin-updates]: https://plugins.jetbrains.com/docs/marketplace/plugin-updates.html
