@@ -271,9 +271,14 @@ platforms.forEach { platform ->
     val variant = platform.getValue("variant")
     val executable = if (variant.startsWith("windows-")) "lspf-analysis.exe" else "lspf-analysis"
     val binary = nativeDirectory.map { it.file("$variant/server/$executable") }
-    tasks.named("buildPluginVariants_${variant.replace('-', '_')}") {
+    tasks.named<Zip>("buildPluginVariants_${variant.replace('-', '_')}") {
         mustRunAfter(prepareServer)
         inputs.file(binary)
+        // Gradle 9 archives default to 0644 even when the source is executable.
+        // Set the ZIP entry explicitly, including when packaging on Windows.
+        filesMatching("**/server/$executable") {
+            permissions { unix("755") }
+        }
         doFirst {
             require(binary.get().asFile.length() > 0) { "Missing server for $variant; stage all native servers first" }
         }
