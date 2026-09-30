@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
+from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath
 
 import tomllib
@@ -80,6 +81,58 @@ def validate_tag(tag, release_version, commit):
     )
 
 
+def verification_ides(data):
+    """Use representative IDEs for ordinary PRs and the full matrix otherwise."""
+    full = True
+    if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
+        event = json.loads(
+            Path(os.environ["GITHUB_EVENT_PATH"]).read_text(encoding="utf-8")
+        )
+        pr = event["pull_request"]
+        changed = git(
+            "diff",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            f"{pr['base']['sha']}...{pr['head']['sha']}",
+            "--",
+        ).split("\0")
+        compatibility_paths = (
+            ".github/workflows/release-intellij.yml",
+            "clients/intellij/release.json",
+            "clients/intellij/*.gradle.kts",
+            "clients/intellij/gradle.properties",
+            "clients/intellij/gradle/*",
+            "clients/intellij/gradlew*",
+            "clients/intellij/src/main/resources/META-INF/*.xml",
+            "clients/intellij/scripts/*",
+        )
+        full = any(
+            fnmatchcase(path, pattern)
+            for path in changed
+            for pattern in compatibility_paths
+        )
+    if full:
+        return [
+            {"type": ide["type"], "version": value}
+            for ide in data["ides"]
+            for value in ide["versions"]
+        ]
+
+    versions = {
+        ide["type"]: sorted(
+            set(ide["versions"]), key=lambda value: tuple(map(int, value.split(".")))
+        )
+        for ide in data["ides"]
+    }
+    return [
+        {"type": "IntellijIdea", "version": value}
+        for value in dict.fromkeys(
+            (versions["IntellijIdea"][0], versions["IntellijIdea"][-1])
+        )
+    ] + [{"type": "PyCharm", "version": versions["PyCharm"][-1]}]
+
+
 def metadata():
     release_version = version()
     commit = git("rev-parse", "HEAD")
@@ -97,13 +150,7 @@ def metadata():
         "publish": str(publish).lower(),
         "prerelease": str("-rc." in release_version).lower(),
         "platforms": {"include": data["platforms"]},
-        "ides": {
-            "include": [
-                {"type": ide["type"], "version": v}
-                for ide in data["ides"]
-                for v in ide["versions"]
-            ]
-        },
+        "ides": {"include": verification_ides(data)},
     }
     if output := os.environ.get("GITHUB_OUTPUT"):
         with open(output, "a", encoding="utf-8") as stream:
