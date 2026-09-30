@@ -1,0 +1,59 @@
+{
+  "sinceBuild": "261.26222",
+  "untilBuild": "262.*",
+  "platforms": [
+    {
+      "target": "win32-x64",
+      "variant": "windows-x86_64",
+      "rust": "x86_64-pc-windows-msvc",
+      "runner": "windows-2025"
+    },
+    {
+      "target": "win32-arm64",
+      "variant": "windows-arm64",
+      "rust": "aarch64-pc-windows-msvc",
+      "runner": "windows-11-arm"
+    },
+    {
+      "target": "darwin-x64",
+      "variant": "mac-x86_64",
+      "rust": "x86_64-apple-darwin",
+      "runner": "macos-15-intel"
+    },
+    {
+      "target": "darwin-arm64",
+      "variant": "mac-arm64",
+      "rust": "aarch64-apple-darwin",
+      "runner": "macos-15"
+    },
+    {
+      "target": "linux-x64",
+      "variant": "linux-x86_64",
+      "rust": "x86_64-unknown-linux-musl",
+      "runner": "ubuntu-24.04"
+    },
+    {
+      "target": "linux-arm64",
+      "variant": "linux-arm64",
+      "rust": "aarch64-unknown-linux-musl",
+      "runner": "ubuntu-24.04-arm"
+    }
+  ],
+  "ides": [
+    {
+      "type": "IntellijIdea",
+      "code": "IU",
+      "versions": ["2026.1.4", "2026.2.3"]
+    },
+    { "type": "PyCharm", "code": "PY", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "WebStorm", "code": "WS", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "PhpStorm", "code": "PS", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "RubyMine", "code": "RM", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "CLion", "code": "CL", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "GoLand", "code": "GO", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "Rider", "code": "RD", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "RustRover", "code": "RR", "versions": ["2026.1.4", "2026.2.3"] },
+    { "type": "DataGrip", "code": "DB", "versions": ["2026.1.4", "2026.2.6"] },
+    { "type": "DataSpell", "code": "DS", "versions": ["2026.1.3"] }
+  ]
+}
