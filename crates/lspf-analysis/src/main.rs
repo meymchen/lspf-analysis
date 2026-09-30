@@ -21,6 +21,33 @@ use lspf_analysis_core::{
 
 use cli::{Choice, Command, Metrics, Opts};
 
+// musl's malloc serializes every thread behind one lock, and parsing makes
+// many small allocations on each analysis thread. With many threads the musl
+// build spent most of its time in the kernel waiting on that lock and ran
+// about three times slower than the glibc build. mimalloc takes Rust's
+// allocations off it here, and tree-sitter's in `use_mimalloc_for_tree_sitter`.
+#[cfg(target_env = "musl")]
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
+/// Sends tree-sitter's C allocations through mimalloc as well; they are most
+/// of what parsing allocates. It must run before the first parser exists, or
+/// memory taken from one allocator would be returned to the other.
+#[cfg(target_env = "musl")]
+fn use_mimalloc_for_tree_sitter() {
+    use libmimalloc_sys::{mi_calloc, mi_free, mi_malloc, mi_realloc};
+    // SAFETY: main calls this first, before anything tree-sitter owns has
+    // been allocated, and nothing else sets the allocator.
+    unsafe {
+        tree_sitter::set_allocator(
+            Some(mi_malloc),
+            Some(mi_calloc),
+            Some(mi_realloc),
+            Some(mi_free),
+        );
+    }
+}
+
 /// What `lspf-analysis metrics` reports for one file: the raw metrics tree
 /// and the health scores derived from it, together, so a consumer never has
 /// to recompute one from the other.
@@ -224,6 +251,9 @@ async fn run_serve(choice: Choice) -> lspf::Result<lspf::Outcome> {
 
 #[tokio::main]
 async fn main() {
+    #[cfg(target_env = "musl")]
+    use_mimalloc_for_tree_sitter();
+
     // Logs default to stderr: stdout carries the LSP wire protocol.
     // CodeLLDB on Windows may leave the debuggee's stderr attached to the
     // adapter. An explicit log file lets the debug configuration relay it.

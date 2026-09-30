@@ -30,6 +30,12 @@ tokio = { workspace = true, features = ["sync", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
+# musl's own malloc serializes threads behind one lock; see main.rs.
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1"
+libmimalloc-sys = { version = "0.1", features = ["extended"] }
+tree-sitter.workspace = true
+
 [dev-dependencies]
 lspf = { version = "1.0.3", default-features = false, features = ["stdio", "testing"] }
 tokio = { version = "1", features = ["macros", "rt", "time"] }

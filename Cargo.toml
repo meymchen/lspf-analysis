@@ -21,6 +21,9 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 insta = { version = "1.29.0", features = ["yaml", "json", "redactions"] }
+# The binary also calls into tree-sitter, to choose its allocator; one pin
+# keeps it on the same version the analysis core parses with.
+tree-sitter = "=0.26.13"
 
 [workspace.lints.rust]
 # The tree-sitter grammar crates' generated parser.c marks each
