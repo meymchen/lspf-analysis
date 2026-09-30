@@ -119,8 +119,8 @@ exact GitHub release files so a later workflow run can verify them.
   dependencies, native binary architecture, and executable permissions.
 - Native execution of each packaged server: LSP initialization, document health,
   hover, shutdown, and a clean exit. No target is exempted as a cross build.
-- Plugin Verifier on the minimum and current stable versions of every product
-  in `release.json`. The shared JVM code is checked using the Linux x64 variant;
+- Plugin Verifier on the IDE matrix selected for the run, described below.
+  The shared JVM code is checked using the Linux x64 variant;
   all six variants must have identical JVM code and resources. Verifier's
   `-ignore-os-arch` option excludes synthetic platform selectors from dependency
   resolution; ZIP inspection checks those declarations, and native startup is
@@ -132,6 +132,15 @@ Signing runs only after these jobs succeed. Every signed ZIP is inspected and
 its signature verified. Both destinations consume these same signed files.
 Release builds use the checked-in Rust and Gradle versions and `Cargo.lock`.
 The signing and publishing jobs do not restore caches from PR runs.
+
+Ordinary PRs check IDEA's minimum and newest configured versions, plus PyCharm's
+newest configured version: currently three combinations. Tag releases and manual
+rehearsals check every product/version in `release.json`, currently 21 combinations.
+PRs also use the full matrix when they change the release workflow, `release.json`,
+Gradle build scripts or properties, the Gradle wrapper, XML descriptors under
+`src/main/resources/META-INF/`, or release scripts. Versions for both matrices come
+from `release.json`. All runs keep the six native server checks and the IDEA and
+PyCharm installation tests.
 
 `release.json` pins the IDE test matrix and compatibility bounds. Update it by
 PR when adopting a new stable IDE series, and extend the upper bound only after

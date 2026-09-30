@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import os
 import stat
 import struct
@@ -7,6 +8,7 @@ import tempfile
 import unittest
 import urllib.request
 import zipfile
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -63,6 +65,137 @@ def archive(
         server.external_attr = (stat.S_IFREG | (0o755 if executable else 0o644)) << 16
         contents.writestr(server, binary("windows-arm64" if wrong_binary else variant))
     return path
+
+
+class CompatibilityTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.repository = self.directory / "repository"
+        self.repository.mkdir()
+        self.enterContext(patch.object(release, "ROOT", self.repository))
+        self.event = self.directory / "event.json"
+        self.enterContext(
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_EVENT_NAME": "pull_request",
+                    "GITHUB_EVENT_PATH": str(self.event),
+                    "GITHUB_OUTPUT": "",
+                },
+            )
+        )
+        release.git("init", "--quiet")
+        self.descriptor = (
+            self.repository / "clients/intellij/src/main/resources/META-INF/plugin.xml"
+        )
+        self.descriptor.parent.mkdir(parents=True)
+        self.descriptor.write_text("<idea-plugin/>\n")
+        self.base = self.commit()
+        self.data = {
+            "platforms": release.config()["platforms"],
+            "ides": [
+                {
+                    "type": "IntellijIdea",
+                    "versions": ["2026.2.3", "2026.1.4", "2026.2.10"],
+                },
+                {"type": "PyCharm", "versions": ["2026.2.3", "2026.1.4"]},
+                {"type": "WebStorm", "versions": ["2026.1.4", "2026.2.3"]},
+            ],
+        }
+
+    def commit(self):
+        release.git("add", ".")
+        release.git(
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "Test change",
+        )
+        return release.git("rev-parse", "HEAD")
+
+    def select(self, *, base=None, head=None):
+        self.event.write_text(
+            json.dumps(
+                {
+                    "pull_request": {
+                        "base": {"sha": base or self.base},
+                        "head": {"sha": head or release.git("rev-parse", "HEAD")},
+                    }
+                }
+            )
+        )
+        return release.verification_ides(self.data)
+
+    def test_ordinary_pr_metadata_uses_three_ide_builds_and_all_native_platforms(self):
+        (self.repository / "clients/intellij/Health.kt").write_text("// UI change\n")
+        self.commit()
+        self.select()
+        output = io.StringIO()
+        with (
+            patch.object(release, "config", return_value=self.data),
+            redirect_stdout(output),
+        ):
+            release.metadata()
+        metadata = json.loads(output.getvalue())
+        self.assertEqual(
+            [
+                {"type": "IntellijIdea", "version": "2026.1.4"},
+                {"type": "IntellijIdea", "version": "2026.2.10"},
+                {"type": "PyCharm", "version": "2026.2.3"},
+            ],
+            metadata["ides"]["include"],
+        )
+        self.assertEqual(self.data["platforms"], metadata["platforms"]["include"])
+        self.assertEqual("false", metadata["publish"])
+
+    def test_compatibility_changes_use_all_ide_builds(self):
+        for path in (
+            "clients/intellij/build.gradle.kts",
+            "clients/intellij/release.json",
+            "clients/intellij/gradle/wrapper/gradle-wrapper.properties",
+            "clients/intellij/scripts/release.py",
+            ".github/workflows/release-intellij.yml",
+        ):
+            with self.subTest(path=path):
+                base = release.git("rev-parse", "HEAD")
+                changed = self.repository / path
+                changed.parent.mkdir(parents=True, exist_ok=True)
+                changed.write_text("Compatibility change\n")
+                self.commit()
+                self.assertEqual(7, len(self.select(base=base)))
+
+    def test_renamed_descriptor_uses_full_matrix(self):
+        self.descriptor.rename(self.descriptor.with_suffix(".txt"))
+        self.commit()
+        self.assertEqual(7, len(self.select()))
+
+    def test_base_branch_changes_do_not_expand_an_ordinary_pr(self):
+        (self.repository / "clients/intellij/Health.kt").write_text("// UI change\n")
+        head = self.commit()
+        release.git("checkout", "--quiet", "--detach", self.base)
+        (self.repository / "clients/intellij/build.gradle.kts").write_text("// build\n")
+        base = self.commit()
+        self.assertEqual(3, len(self.select(base=base, head=head)))
+
+    def test_tag_manual_and_local_runs_use_full_matrix(self):
+        for event in ("push", "workflow_dispatch", ""):
+            with (
+                self.subTest(event=event),
+                patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}),
+            ):
+                self.assertEqual(7, len(release.verification_ides(self.data)))
+
+    def test_single_idea_version_does_not_create_duplicate_jobs(self):
+        self.data["ides"][0]["versions"] = ["2026.1.4"]
+        self.assertEqual(2, len(self.select()))
 
 
 class BundleTests(unittest.TestCase):
