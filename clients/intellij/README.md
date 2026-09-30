@@ -1,4 +1,4 @@
-# LSPF Analysis for IntelliJ IDEA
+# LSPF Analysis for JetBrains IDEs
 
 Code health analysis for functions and classes, updated while you type.
 
@@ -16,15 +16,26 @@ plugin tells it which language you read.
 
 ## Requirements
 
-**2026.1.4 or later**, any IntelliJ-based IDE. That is the release which
-open-sourced the platform's LSP client, the one this plugin uses; before it, LSP
-integration was a commercial-IDE extension and a plugin built on it was silently
-inert in Community builds and Android Studio.
+JetBrains desktop IDEs on platform **261.26222 through 262.\***. The baseline
+corresponds to **2026.1.4** for most products; DataSpell calls the equivalent
+platform release **2026.1.3**. The [release matrix](release.json) lists each
+product's tested versions.
 
-Only the Windows x64 build ships with a server binary today. On any other
-platform the plugin works the same, but you have to build the server yourself
-(`cargo install --path crates/lspf-analysis`) and point **Language server path**
-at it.
+Release packages bundle a server for **Windows, macOS, and Linux**, each on
+**x64 and ARM64**. Choose the ZIP matching the machine running the IDE.
+Remote development and WSL server deployments are outside the initial support
+scope. A custom **Language server path** remains available for advanced use.
+
+## Installation
+
+Download the matching IntelliJ ZIP from [GitHub Releases][releases], then use
+**Settings | Plugins | Install Plugin from Disk**. RC packages are GitHub
+prereleases and require manual installation. Stable versions are also submitted
+to JetBrains Marketplace after its initial listing has been created; availability
+there follows JetBrains' review. The [publishing guide](PUBLISHING.md) describes
+the first release, verification, signing, and recovery.
+
+[releases]: https://github.com/meymchen/lspf-analysis/releases
 
 ## What it reports
 
@@ -116,22 +127,25 @@ have none — and a Rust toolchain on the path:
 
 ```console
 ./gradlew test          # model and IntelliJ integration tests
-./gradlew buildPlugin   # build/distributions/lspf-analysis-intellij-win32-x64-<version>.zip
+./gradlew prepareServer buildPluginVariants_windows_x86_64 # native Windows ZIP
 ./gradlew runIde        # IntelliJ IDEA sandbox with the plugin installed
 ./gradlew runPyCharm    # PyCharm sandbox with the plugin installed
-./gradlew verifyPlugin  # IntelliJ Plugin Verifier against the supported range
+./gradlew verifyPlugin  # local compatibility check against the build IDE
 ```
 
-`buildPlugin` runs `cargo build --release` for the packaged target and puts the
-binary in `server/` inside the ZIP.
+`prepareServer` runs `cargo build --locked --release` for the host target and
+stages the server for its native variant. Select the corresponding variant task
+for other systems; all targets and the full release procedure are documented in
+[PUBLISHING.md](PUBLISHING.md). The platform-independent `buildPlugin` ZIP is an
+intermediate artifact, not an installable release.
 
 `runIde` never does that. A sandbox IDE runs `target/debug/lspf-analysis` from
 the repository instead, so `runIde` builds only that — a plain host `cargo build`
 — and skips the release build it would have no use for.
 
-Other platforms are one line in the `serverTargets` map in `build.gradle.kts`
-plus a ZIP to publish. A cross build also needs `rustup target add` for the
-matching triple and a C toolchain for it, since the tree-sitter grammars are C.
+The platform map lives in `release.json`. A cross build also needs
+`rustup target add` for the matching triple and a C toolchain for it, since the
+tree-sitter grammars are C. CI builds and starts every target natively.
 
 ### Debugging the plugin
 

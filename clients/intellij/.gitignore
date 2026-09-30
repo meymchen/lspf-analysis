@@ -4,6 +4,7 @@
 .kotlin/
 build/
 out/
+__pycache__/
 
 # JVM crash reports and local logs.
 hs_err_pid*

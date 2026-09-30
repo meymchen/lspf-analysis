@@ -74,9 +74,9 @@ fun expandHome(candidate: String, homeDirectory: String): String {
 /**
  * Explains a binary that is not there.
  *
- * For a packaged plugin the likely cause is a ZIP built for another platform:
- * only Windows is published today, so anyone else installing it lands here, and
- * saying so is more useful than reporting a bare path.
+ * A packaged plugin needs its matching native server. A missing file usually
+ * means an incomplete installation; the message points to the platform package
+ * or an explicitly configured server rather than reporting only a bare path.
  */
 fun describeMissingServer(resolved: ResolvedServer): String {
     val found = t("server.missing", resolved.binary.toString())
