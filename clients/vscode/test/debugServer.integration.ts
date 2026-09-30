@@ -128,7 +128,9 @@ test(
     );
     t.after(() => connection.dispose());
     const notified: Array<{ method: string; params: unknown }> = [];
-    connection.onNotification((method, params) => notified.push({ method, params }));
+    connection.onNotification((method, params) => {
+      notified.push({ method, params });
+    });
     connection.listen();
 
     await connection.sendRequest('initialize', {

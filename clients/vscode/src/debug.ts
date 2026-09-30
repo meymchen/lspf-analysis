@@ -55,6 +55,8 @@ export async function connectToWebSocketServer(
         socket.on('error', reject);
         socket.once('open', () => {
           const adapter = {
+            // Marks this as an adapter rather than a browser WebSocket to wrap.
+            $type: 'IWebSocket' as const,
             send: (content: string) => socket.send(content),
             onMessage: (callback: (data: string) => void) =>
               socket.on('message', (data) => callback(data.toString())),

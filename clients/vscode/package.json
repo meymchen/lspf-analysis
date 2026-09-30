@@ -253,11 +253,10 @@
         "lspfAnalysis.trace.server": {
           "type": "string",
           "enum": [
-            "off",
             "messages",
             "verbose"
           ],
-          "default": "off",
+          "default": "messages",
           "description": "%config.trace.server%"
         }
       }
@@ -278,8 +277,8 @@
     "vscode:prepublish": "npm run bundle"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.1.1",
-    "vscode-ws-jsonrpc": "^3.5.0",
+    "vscode-languageclient": "^10.1.2",
+    "vscode-ws-jsonrpc": "^4.0.2",
     "ws": "^8.21.3"
   },
   "devDependencies": {
@@ -291,6 +290,6 @@
     "ovsx": "^1.2.0",
     "prettier": "3.9.8",
     "typescript": "^7.0.2",
-    "vscode-jsonrpc": "~8.2.1"
+    "vscode-jsonrpc": "~9.0.2"
   }
 }

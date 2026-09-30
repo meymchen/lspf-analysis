@@ -80,7 +80,8 @@ Java 类健康度使用类加权方法数、公开方法数和公开属性数。
 控制流、规模和词汇负担的默认权重各为 `1`，接口和类设计各为 `0.5`。
 类设计权重控制 Java 类对文件评分的贡献。
 
-排查问题时，可通过 `lspfAnalysis.trace.server` 开启协议跟踪。
+排查问题时，可通过 **Developer: Set Log Level** 将 LSPF Analysis 输出通道的日志级别设为 Trace。
+这样会显示服务器的调试日志并跟踪协议；`lspfAnalysis.trace.server` 用于在 `messages` 和 `verbose` 之间选择。
 `lspfAnalysis.server.path` 用于指定自定义服务器程序，留空则使用内置程序。
 修改此路径后，请重新加载窗口。
 
