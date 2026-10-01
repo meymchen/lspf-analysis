@@ -18,8 +18,8 @@ updates:
         update-types: [minor, patch]
 
   - package-ecosystem: cargo
-    # enums is its own workspace with its own lockfile.
-    directories: ["/", "/enums"]
+    # The grammar generator and Zed extension have independent lockfiles.
+    directories: ["/", "/enums", "/clients/zed"]
     schedule:
       interval: weekly
     cooldown:

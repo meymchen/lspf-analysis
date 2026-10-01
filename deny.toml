@@ -1,4 +1,4 @@
-# cargo-deny policy for the workspace and for the grammar generator in enums/.
+# cargo-deny policy for the server, grammar generator, and Zed extension.
 # Run with `cargo deny check`; the audit workflow and the audit pre-commit hook
 # both read this file.
 

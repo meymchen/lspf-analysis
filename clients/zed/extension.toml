@@ -1,0 +1,29 @@
+id = "lspf-analysis"
+name = "LSPF Analysis"
+version = "0.1.0"
+schema_version = 1
+authors = ["meymchen"]
+description = "Code health diagnostics and function and class score hovers."
+repository = "https://github.com/meymchen/lspf-analysis"
+
+[lib]
+kind = "Rust"
+version = "0.7.0"
+
+[language_servers.lspf-analysis]
+name = "LSPF Analysis"
+languages = ["C++", "Java", "JavaScript", "Python", "Rust", "TSX", "TypeScript"]
+
+[language_servers.lspf-analysis.language_ids]
+"C++" = "cpp"
+Java = "java"
+JavaScript = "javascript"
+Python = "python"
+Rust = "rust"
+TSX = "typescriptreact"
+TypeScript = "typescript"
+
+[[capabilities]]
+kind = "download_file"
+host = "github.com"
+path = ["meymchen", "lspf-analysis", "releases", "download", "**"]

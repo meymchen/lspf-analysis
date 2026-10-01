@@ -1,5 +1,6 @@
 # Zed dev-extension output. Cargo target/ is covered by the root .gitignore.
 /extension.wasm
+/scripts/__pycache__/
 
 # Grammar repositories downloaded by Zed and their compiled WebAssembly files.
 /grammars/

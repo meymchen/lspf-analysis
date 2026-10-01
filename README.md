@@ -321,6 +321,15 @@ include health thresholds and weights, diagnostics, server path, and protocol
 tracing. See [the extension's README](./clients/vs/README.md) for packaging,
 stdio/TCP/WebSocket debugging, and integration tests.
 
+### Zed
+
+[`clients/zed`](./clients/zed) adds code health diagnostics and score hovers
+alongside the existing language servers. It supports Windows, macOS, and Linux
+on x64 and ARM64, using a pinned server download or an explicit local binary.
+For development installation and configuration, see the
+[Zed client README](./clients/zed/README.md). The extension and standalone server
+release workflows are prepared; first-time use can point to a local build.
+
 ### The binary on its own
 
 ```console
