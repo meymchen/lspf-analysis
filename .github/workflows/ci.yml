@@ -29,7 +29,8 @@ jobs:
     outputs:
       rust: ${{ github.event_name != 'pull_request' || steps.filter.outputs.rust == 'true' }}
       vscode: ${{ github.event_name != 'pull_request' || steps.filter.outputs.vscode == 'true' }}
-      intellij: ${{ github.event_name != 'pull_request' || steps.filter.outputs.intellij == 'true' }}
+      intellij: ${{ github.event_name != 'pull_request' || steps.filter.outputs.intellij == 'true' || steps.filter.outputs.intellij_release == 'true' }}
+      intellij_release: ${{ steps.filter.outputs.intellij_release }}
       vs: ${{ github.event_name != 'pull_request' || steps.filter.outputs.vs == 'true' }}
     steps:
       - id: filter
@@ -54,6 +55,15 @@ jobs:
             intellij:
               - *workflow
               - "clients/intellij/**"
+            # Keep these paths aligned with release-intellij.yml. CI owns the
+            # Rust and Kotlin checks for every PR that builds IntelliJ packages.
+            intellij_release:
+              - .github/workflows/release-intellij.yml
+              - "clients/intellij/**"
+              - "crates/**"
+              - Cargo.toml
+              - Cargo.lock
+              - rust-toolchain.toml
             vs:
               - *rust
               - "clients/vs/**"
@@ -96,7 +106,7 @@ jobs:
 
   rust-lint:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.intellij_release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -116,19 +126,22 @@ jobs:
       - name: Format (workspace)
         run: cargo fmt --all -- --check
       - name: Format (enums)
+        if: needs.changes.outputs.rust == 'true'
         run: cargo fmt --manifest-path enums/Cargo.toml -- --check
       - name: Clippy (workspace)
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Clippy (enums)
+        if: needs.changes.outputs.rust == 'true'
         run: cargo clippy --manifest-path enums/Cargo.toml --all-targets --locked -- -D warnings
 
   rust-test:
     needs: changes
-    if: needs.changes.outputs.rust == 'true'
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.intellij_release == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # IntelliJ-only PRs retain the Linux checks formerly run by release CI.
+        os: ${{ fromJSON(needs.changes.outputs.rust == 'true' && '["ubuntu-latest", "windows-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     permissions:
@@ -204,8 +217,8 @@ jobs:
       # Validates the wrapper jar, and caches the Gradle user home, which is
       # also where the IntelliJ Platform plugin keeps the downloaded IDE.
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
-      # The release workflow verifies native packages and the complete IDE
-      # matrix. --continue reports ordinary lint and tests together here.
+      # The release workflow verifies native packages and the selected IDE
+      # matrix. CI runs Kotlin lint and tests once per PR, including server PRs.
       - run: ./gradlew --continue ktlintCheck test
       - if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

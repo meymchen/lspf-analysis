@@ -47,8 +47,8 @@ as the plugin homepage. The numeric Marketplace ID is assigned during the
    changes to the bundled server. Do not use an `unreleased` entry for a tag.
 2. Open and merge a PR into `main`. Both PR and manual workflow runs build and
    verify packages, without signing or publishing, even if a manual run selects
-   a tag. Treat the release workflow's `release-checks` result as required for
-   changes to the plugin, server, or release machinery.
+   a tag. Require both CI's `ci-ok` and the release workflow's `release-checks`
+   for changes to the plugin, server, or release machinery.
 3. Tag the merged commit and push the tag. For the first rehearsal:
 
    ```console
@@ -127,6 +127,12 @@ exact GitHub release files so a later workflow run can verify them.
   checked independently for all six targets. Other missing dependencies fail.
 - IDEA and PyCharm installation tests using the JAR and server extracted from
   the actual distribution, without development-mode server path overrides.
+
+On PRs, CI runs the Rust and Kotlin checks once, including when only the plugin
+or release workflow changes. These IntelliJ-only changes run Rust checks on
+Linux; Rust changes still run workspace tests on all three operating systems.
+The release workflow runs the release-script tests and package verification.
+Tag releases and manual rehearsals also run their own Rust and Kotlin checks.
 
 Signing runs only after these jobs succeed. Every signed ZIP is inspected and
 its signature verified. Both destinations consume these same signed files.
