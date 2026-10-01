@@ -40,6 +40,12 @@ SAMPLES = [
 ]
 
 
+def require(condition, message):
+    """Keep smoke checks active even when Python runs with -O."""
+    if not condition:
+        raise ValueError(message)
+
+
 def smoke(binary):
     environment = {
         key: value
@@ -136,7 +142,10 @@ def smoke(binary):
             1,
         )
         result = receive(lambda m: m.get("id") == 1)["result"]
-        assert result["capabilities"]["hoverProvider"]
+        require(
+            result["capabilities"]["hoverProvider"],
+            "Server must advertise hover support",
+        )
         send("initialized", {})
         # Zed sends this immediately after initialization, and on settings edits.
         send("workspace/didChangeConfiguration", {"settings": settings})
@@ -166,9 +175,13 @@ def smoke(binary):
             hover = receive(lambda m, expected=request_id: m.get("id") == expected)[
                 "result"
             ]
-            assert hover and "wide" in json.dumps(hover), (language_id, hover)
-            assert "<span" not in json.dumps(hover), (
-                "Undeclared HTML must not reach Zed"
+            require(
+                hover and "wide" in json.dumps(hover),
+                f"Expected function hover for {language_id}: {hover}",
+            )
+            require(
+                "<span" not in json.dumps(hover),
+                "Undeclared HTML must not reach Zed",
             )
             send("textDocument/didClose", {"textDocument": {"uri": uri}})
             diagnostics(uri, False)
@@ -195,17 +208,23 @@ def smoke(binary):
             30,
         )
         hover = receive(lambda m: m.get("id") == 30)["result"]
-        assert any(
-            "\u4e00" <= char <= "\u9fff"
-            for char in json.dumps(hover, ensure_ascii=False)
+        require(
+            any(
+                "\u4e00" <= char <= "\u9fff"
+                for char in json.dumps(hover, ensure_ascii=False)
+            ),
+            "Expected Chinese hover after changing the locale",
         )
         settings["lspfAnalysis"]["diagnostics"] = {"enabled": False}
         send("workspace/didChangeConfiguration", {"settings": settings})
         diagnostics(uri, False)
         send("shutdown", request_id=99)
-        assert receive(lambda m: m.get("id") == 99)["result"] is None
+        require(
+            receive(lambda m: m.get("id") == 99)["result"] is None,
+            "Shutdown must return a null result",
+        )
         send("exit")
-        assert process.wait(timeout=10) == 0
+        require(process.wait(timeout=10) == 0, "Server must exit successfully")
         print(
             "PASS: 8 language IDs/file types, diagnostics, Markdown hover, live settings, Chinese, shutdown"
         )
