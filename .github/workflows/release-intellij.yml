@@ -59,7 +59,8 @@ jobs:
 
   checks:
     needs: prepare
-    if: needs.prepare.outputs.reuse == 'none'
+    # PRs run these checks in ci.yml; tags and manual rehearsals are self-contained.
+    if: github.event_name != 'pull_request' && needs.prepare.outputs.reuse == 'none'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
