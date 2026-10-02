@@ -82,7 +82,7 @@ def validate_tag(tag, release_version, commit):
 
 
 def verification_ides(data):
-    """Use representative IDEs for ordinary PRs and the full matrix otherwise."""
+    """Verify each selected product's configured minimum IDE version."""
     full = True
     if os.environ.get("GITHUB_EVENT_NAME") == "pull_request":
         event = json.loads(
@@ -112,25 +112,11 @@ def verification_ides(data):
             for path in changed
             for pattern in compatibility_paths
         )
-    if full:
-        return [
-            {"type": ide["type"], "version": value}
-            for ide in data["ides"]
-            for value in ide["versions"]
-        ]
-
-    versions = {
-        ide["type"]: sorted(
-            set(ide["versions"]), key=lambda value: tuple(map(int, value.split(".")))
-        )
-        for ide in data["ides"]
-    }
     return [
-        {"type": "IntellijIdea", "version": value}
-        for value in dict.fromkeys(
-            (versions["IntellijIdea"][0], versions["IntellijIdea"][-1])
-        )
-    ] + [{"type": "PyCharm", "version": versions["PyCharm"][-1]}]
+        {"type": ide["type"], "version": ide["version"]}
+        for ide in data["ides"]
+        if full or ide["type"] in {"IntellijIdea", "PyCharm"}
+    ]
 
 
 def metadata():
@@ -304,9 +290,11 @@ def inspect_archive(path, item, release_version):
         if (
             bounds is None
             or bounds.get("since-build") != config()["sinceBuild"]
-            or bounds.get("until-build") != config()["untilBuild"]
+            or "until-build" in bounds.attrib
         ):
-            raise ValueError("IDE compatibility range differs from release.json")
+            raise ValueError(
+                "IDE compatibility must match release.json sinceBuild without until-build"
+            )
     return {
         "target": item["target"],
         "variant": item["variant"],

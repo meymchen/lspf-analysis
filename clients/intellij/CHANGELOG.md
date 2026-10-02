@@ -7,7 +7,8 @@
 - Show function and class health in gutter hovers, the status bar, and the
   Code Health tool window for C++, Java, JavaScript, Python, Rust, TypeScript,
   and TSX.
-- Support the JetBrains IDE family on platform builds 261.26222 through 262.*.
+- Require platform build 261.26222 or later, with no upper IDE version limit.
+  CI verifies minimum versions; JetBrains Marketplace checks newer IDE builds.
 - Publish signed packages with checksums and a manifest for each release.
 - List Yuming Chen as the publisher, with a contact email and links to the
   publisher and plugin homepages.

@@ -43,15 +43,20 @@ def archive(
     executable=True,
     wrong_version=False,
     code=b"shared JVM code",
+    since_build="261.26222",
+    until_build=None,
 ):
     variant = item["variant"]
     release_version = release.version()
     name = f"lspf-analysis-{release_version}-{variant}.zip"
     path = directory / name
     os_name, architecture = variant.split("-")
+    bounds = f'since-build="{since_build}"'
+    if until_build is not None:
+        bounds += f' until-build="{until_build}"'
     descriptor = f"""<idea-plugin><id>{release.PLUGIN_ID}</id>
       <version>{release_version if wrong_version else release_version + "-" + variant}</version>
-      <idea-version since-build="261.26222" until-build="262.*"/>
+      <idea-version {bounds}/>
       <depends>com.intellij.modules.lsp</depends>
       <depends>com.intellij.modules.os.{os_name}</depends>
       <depends>com.intellij.modules.arch.{architecture}</depends></idea-plugin>"""
@@ -96,12 +101,9 @@ class CompatibilityTests(unittest.TestCase):
         self.data = {
             "platforms": release.config()["platforms"],
             "ides": [
-                {
-                    "type": "IntellijIdea",
-                    "versions": ["2026.2.3", "2026.1.4", "2026.2.10"],
-                },
-                {"type": "PyCharm", "versions": ["2026.2.3", "2026.1.4"]},
-                {"type": "WebStorm", "versions": ["2026.1.4", "2026.2.3"]},
+                {"type": "IntellijIdea", "version": "2026.1.4"},
+                {"type": "PyCharm", "version": "2026.1.4"},
+                {"type": "DataSpell", "version": "2026.1.3"},
             ],
         }
 
@@ -134,7 +136,7 @@ class CompatibilityTests(unittest.TestCase):
         )
         return release.verification_ides(self.data)
 
-    def test_ordinary_pr_metadata_uses_three_ide_builds_and_all_native_platforms(self):
+    def test_ordinary_pr_metadata_uses_minimum_ides_and_all_native_platforms(self):
         (self.repository / "clients/intellij/Health.kt").write_text("// UI change\n")
         self.commit()
         self.select()
@@ -148,15 +150,14 @@ class CompatibilityTests(unittest.TestCase):
         self.assertEqual(
             [
                 {"type": "IntellijIdea", "version": "2026.1.4"},
-                {"type": "IntellijIdea", "version": "2026.2.10"},
-                {"type": "PyCharm", "version": "2026.2.3"},
+                {"type": "PyCharm", "version": "2026.1.4"},
             ],
             metadata["ides"]["include"],
         )
         self.assertEqual(self.data["platforms"], metadata["platforms"]["include"])
         self.assertEqual("false", metadata["publish"])
 
-    def test_compatibility_changes_use_all_ide_builds(self):
+    def test_compatibility_changes_use_all_product_minimums(self):
         for path in (
             "clients/intellij/build.gradle.kts",
             "clients/intellij/release.json",
@@ -170,12 +171,12 @@ class CompatibilityTests(unittest.TestCase):
                 changed.parent.mkdir(parents=True, exist_ok=True)
                 changed.write_text("Compatibility change\n")
                 self.commit()
-                self.assertEqual(7, len(self.select(base=base)))
+                self.assertEqual(self.data["ides"], self.select(base=base))
 
     def test_renamed_descriptor_uses_full_matrix(self):
         self.descriptor.rename(self.descriptor.with_suffix(".txt"))
         self.commit()
-        self.assertEqual(7, len(self.select()))
+        self.assertEqual(self.data["ides"], self.select())
 
     def test_base_branch_changes_do_not_expand_an_ordinary_pr(self):
         (self.repository / "clients/intellij/Health.kt").write_text("// UI change\n")
@@ -183,19 +184,15 @@ class CompatibilityTests(unittest.TestCase):
         release.git("checkout", "--quiet", "--detach", self.base)
         (self.repository / "clients/intellij/build.gradle.kts").write_text("// build\n")
         base = self.commit()
-        self.assertEqual(3, len(self.select(base=base, head=head)))
+        self.assertEqual(2, len(self.select(base=base, head=head)))
 
-    def test_tag_manual_and_local_runs_use_full_matrix(self):
+    def test_tag_manual_and_local_runs_use_all_product_minimums(self):
         for event in ("push", "workflow_dispatch", ""):
             with (
                 self.subTest(event=event),
                 patch.dict(os.environ, {"GITHUB_EVENT_NAME": event}),
             ):
-                self.assertEqual(7, len(release.verification_ides(self.data)))
-
-    def test_single_idea_version_does_not_create_duplicate_jobs(self):
-        self.data["ides"][0]["versions"] = ["2026.1.4"]
-        self.assertEqual(2, len(self.select()))
+                self.assertEqual(self.data["ides"], release.verification_ides(self.data))
 
 
 class BundleTests(unittest.TestCase):
@@ -262,6 +259,20 @@ class BundleTests(unittest.TestCase):
         item = self.items[0]
         path = archive(self.directory, item, wrong_version=True)
         with self.assertRaisesRegex(ValueError, "descriptor version"):
+            release.inspect_archive(path, item, release.version())
+
+    def test_upper_ide_bound_is_rejected(self):
+        item = self.items[0]
+        for until_build in ("262.*", ""):
+            with self.subTest(until_build=until_build):
+                path = archive(self.directory, item, until_build=until_build)
+                with self.assertRaisesRegex(ValueError, "without until-build"):
+                    release.inspect_archive(path, item, release.version())
+
+    def test_wrong_minimum_ide_build_is_rejected(self):
+        item = self.items[0]
+        path = archive(self.directory, item, since_build="261")
+        with self.assertRaisesRegex(ValueError, "sinceBuild"):
             release.inspect_archive(path, item, release.version())
 
     def test_unsafe_zip_paths_are_rejected(self):

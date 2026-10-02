@@ -16,10 +16,17 @@ plugin tells it which language you read.
 
 ## Requirements
 
-JetBrains desktop IDEs on platform **261.26222 through 262.\***. The baseline
+JetBrains desktop IDEs on platform **261.26222 or later**. The baseline
 corresponds to **2026.1.4** for most products; DataSpell calls the equivalent
 platform release **2026.1.3**. The [release matrix](release.json) lists each
-product's tested versions.
+product's minimum tested version.
+
+Marketplace calculates compatible IDE products from the plugin's required
+platform and LSP modules. Packages have no upper IDE version limit. CI verifies
+the configured minimum versions; Marketplace checks compatibility with newer
+IDE builds and can restrict incompatible versions. The
+[publishing guide](PUBLISHING.md#automatic-product-compatibility) describes
+this policy and the automatic compatibility setting.
 
 Release packages bundle a server for **Windows, macOS, and Linux**, each on
 **x64 and ARM64**. Choose the ZIP matching the machine running the IDE.

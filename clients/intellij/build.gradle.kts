@@ -21,6 +21,10 @@ val releaseConfig = JsonSlurper().parseText(
 
 @Suppress("UNCHECKED_CAST")
 val platforms = releaseConfig["platforms"] as List<Map<String, String>>
+
+@Suppress("UNCHECKED_CAST")
+val minimumIdeVersions = (releaseConfig["ides"] as List<Map<String, String>>)
+    .associate { it.getValue("type") to it.getValue("version") }
 val serverTargets = platforms.associate { it.getValue("target") to it.getValue("rust") }
 val hostOs = when {
     System.getProperty("os.name").startsWith("Windows") -> "win32"
@@ -48,7 +52,7 @@ val hostExecutable =
 
 /** The repository root: this build lives two levels below it. */
 val repositoryRoot: File = rootDir.parentFile.parentFile
-val ideVersion = "2026.1.4"
+val ideVersion = minimumIdeVersions.getValue("IntellijIdea")
 val nativeDirectory = layout.buildDirectory.dir("native")
 val releaseArchive = providers.gradleProperty("releaseArchive")
 val changelog = providers.fileContents(layout.projectDirectory.file("CHANGELOG.md")).asText.get().replace("\r\n", "\n")
@@ -61,8 +65,9 @@ releaseSmokeSources.compileClasspath += sourceSets.main.get().output + sourceSet
 
 // This test installs the downloaded ZIP. Its runtime excludes main's build output.
 intellijPlatformTesting.testIde.register("releaseSmoke") {
-    type = IntelliJPlatformType.valueOf(providers.gradleProperty("smokeIde").getOrElse("IntellijIdea"))
-    version = ideVersion
+    val smokeIde = providers.gradleProperty("smokeIde").getOrElse("IntellijIdea")
+    type = IntelliJPlatformType.valueOf(smokeIde)
+    version = minimumIdeVersions.getValue(smokeIde)
     testFramework(TestFrameworkType.Platform)
     val installed = layout.buildDirectory.dir("release-smoke-plugin/lspf-analysis")
     prepareSandboxTask {
@@ -100,7 +105,7 @@ dependencies {
 
 intellijPlatformTesting.runIde.register("runPyCharm") {
     type = IntelliJPlatformType.PyCharm
-    version = ideVersion
+    version = minimumIdeVersions.getValue("PyCharm")
 }
 
 intellijPlatform {
@@ -112,7 +117,8 @@ intellijPlatform {
             // build number rather than "261.4", which would also admit every
             // earlier 2026.1 build -- none of which has com.intellij.modules.lsp.
             sinceBuild = releaseConfig.getValue("sinceBuild") as String
-            untilBuild = releaseConfig.getValue("untilBuild") as String
+            // Keep compatibility open-ended; clear Gradle's default upper bound.
+            untilBuild = provider { null }
         }
     }
     nativeVariants {
