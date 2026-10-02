@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        manifest: [Cargo.toml, enums/Cargo.toml]
+        manifest: [Cargo.toml, enums/Cargo.toml, clients/zed/Cargo.toml]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

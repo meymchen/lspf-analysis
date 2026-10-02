@@ -293,6 +293,13 @@ clients/intellij/gradlew -p clients/intellij buildPlugin
 打包、stdio/TCP/WebSocket 调试及集成测试的说明见
 [扩展的 README](./clients/vs/README.md)。
 
+### Zed
+
+[`clients/zed`](./clients/zed) 与已有语言服务器共同提供代码健康度诊断和评分悬停。
+支持 Windows、macOS、Linux 的 x64 和 ARM64，使用固定版本下载或指定本地服务器。
+开发安装和配置见 [Zed 客户端说明](./clients/zed/README.zh-CN.md)。
+扩展及独立服务器的发布流程已准备好，首次本地使用可指向自行构建的服务器。
+
 ### 单独安装可执行文件
 
 ```console

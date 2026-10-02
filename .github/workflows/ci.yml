@@ -32,6 +32,7 @@ jobs:
       intellij: ${{ github.event_name != 'pull_request' || steps.filter.outputs.intellij == 'true' || steps.filter.outputs.intellij_release == 'true' }}
       intellij_release: ${{ steps.filter.outputs.intellij_release }}
       vs: ${{ github.event_name != 'pull_request' || steps.filter.outputs.vs == 'true' }}
+      zed: ${{ github.event_name != 'pull_request' || steps.filter.outputs.zed == 'true' }}
     steps:
       - id: filter
         if: github.event_name == 'pull_request'
@@ -68,6 +69,10 @@ jobs:
               - *rust
               - "clients/vs/**"
               - lspf-analysis.sln
+            zed:
+              - *rust
+              - "clients/zed/**"
+              - "scripts/**"
 
   # Repository-wide formatting, spelling, and the workflows themselves. Cheap
   # enough to run on every change.
@@ -258,11 +263,41 @@ jobs:
       - run: ./clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe
       - run: ./clients/vs/tests/bin/HealthProtocol/net48/HealthSmoke.exe target/debug/lspf-analysis.exe --ws
 
+  zed:
+    needs: changes
+    if: needs.changes.outputs.zed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+      - run: rustup toolchain install
+      - run: rustup target add wasm32-wasip2
+      - run: cargo fmt --manifest-path clients/zed/Cargo.toml -- --check
+      - run: cargo clippy --manifest-path clients/zed/Cargo.toml --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path clients/zed/Cargo.toml --locked
+      - run: cargo build --manifest-path clients/zed/Cargo.toml --target wasm32-wasip2 --release --locked
+      - run: python clients/zed/scripts/check_extension.py
+      - run: python -m unittest discover -s scripts -p 'test_*.py'
+      - run: cargo build --package lspf-analysis --locked
+      - run: python clients/zed/scripts/lsp_smoke.py target/debug/lspf-analysis
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: zed-extension-wasm
+          path: clients/zed/target/wasm32-wasip2/release/lspf_analysis_zed.wasm
+          if-no-files-found: error
+
   # The single required check. Skipped jobs count as passing; a failed or
   # cancelled one fails it.
   ci-ok:
     if: always()
-    needs: [changes, lint, rust-lint, rust-test, vscode, intellij, vs]
+    needs: [changes, lint, rust-lint, rust-test, vscode, intellij, vs, zed]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}

@@ -13,6 +13,7 @@ clients/intellij/.intellijPlatform/
 clients/intellij/.kotlin/
 clients/vscode/dist/
 clients/vscode/out/
+clients/zed/target/
 
 # Generated: rewritten by the tool that owns them.
 package-lock.json

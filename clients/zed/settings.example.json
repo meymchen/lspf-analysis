@@ -1,0 +1,37 @@
+{
+  "lsp": {
+    "lspf-analysis": {
+      "settings": {
+        "lspfAnalysis": {
+          "locale": "en",
+          "health": {
+            "complexityThreshold": 15,
+            "cyclomaticThreshold": 10,
+            "lengthThreshold": 30,
+            "workingMemoryThreshold": 8,
+            "halsteadDifficultyThreshold": 12,
+            "parametersThreshold": 4,
+            "wmcThreshold": 34,
+            "publicMethodsThreshold": 14,
+            "publicAttributesThreshold": 8,
+            "qualityWarn": 25,
+            "qualityError": 10,
+            "worstFunctions": 5,
+            "weights": {
+              "complexity": 1,
+              "length": 1,
+              "workingMemory": 1,
+              "interface": 0.5,
+              "classDesign": 0.5
+            }
+          },
+          "diagnostics": {
+            "enabled": true,
+            "perMetric": false,
+            "file": false
+          }
+        }
+      }
+    }
+  }
+}

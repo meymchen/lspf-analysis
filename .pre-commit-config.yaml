@@ -13,7 +13,7 @@ repos:
         name: fmt (workspace)
         language: system
         files: '\.rs$|(^|/)Cargo\.toml$'
-        exclude: "^enums/"
+        exclude: "^(enums|clients/zed)/"
         entry: cargo fmt --all -- --check
         pass_filenames: false
 
@@ -30,6 +30,7 @@ repos:
         name: clippy
         language: system
         files: '\.rs$'
+        exclude: "^clients/zed/"
         entry: cargo clippy --all-targets --all -- -D warnings
         pass_filenames: false
 
@@ -37,6 +38,7 @@ repos:
         name: udeps
         language: system
         files: '\.rs$'
+        exclude: "^clients/zed/"
         entry: cargo +nightly udeps --all-targets
         pass_filenames: false
 
@@ -44,7 +46,29 @@ repos:
         name: test
         language: system
         files: '\.rs$'
+        exclude: "^clients/zed/"
         entry: cargo test --workspace
+        pass_filenames: false
+
+      - id: fmt-zed
+        name: fmt (Zed)
+        language: system
+        files: '^clients/zed/(.*\.rs|Cargo\.toml)$|^rustfmt\.toml$'
+        entry: cargo fmt --manifest-path clients/zed/Cargo.toml -- --check
+        pass_filenames: false
+
+      - id: clippy-zed
+        name: clippy (Zed)
+        language: system
+        files: '^clients/zed/(.*\.rs|Cargo\.(toml|lock))$'
+        entry: cargo clippy --manifest-path clients/zed/Cargo.toml --all-targets --locked -- -D warnings
+        pass_filenames: false
+
+      - id: test-zed
+        name: test (Zed)
+        language: system
+        files: '^clients/zed/(.*\.rs|Cargo\.(toml|lock)|server-version)$'
+        entry: cargo test --manifest-path clients/zed/Cargo.toml --locked
         pass_filenames: false
 
       # Run from the repository root, which covers the clients too: Prettier

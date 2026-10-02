@@ -11,6 +11,7 @@ exclude = [
   "**/node_modules/**",
   "target/**",
   "enums/target/**",
+  "clients/zed/target/**",
   "clients/intellij/build/**",
   "clients/intellij/.gradle/**",
   "clients/intellij/.intellijPlatform/**",
