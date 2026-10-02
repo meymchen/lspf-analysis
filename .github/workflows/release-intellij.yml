@@ -48,8 +48,8 @@ jobs:
           python-version: "3.12"
       - run: python -m unittest discover -s clients/intellij/scripts -p 'test_*.py'
       - id: metadata
-        # Ordinary PRs use three IDE builds; compatibility changes, tags, and
-        # manual rehearsals use the complete release.json matrix.
+        # Verify only configured minimum versions: IDEA and PyCharm on ordinary
+        # PRs; all release.json products on compatibility changes, tags, and rehearsals.
         run: python clients/intellij/scripts/release.py metadata
       - id: saved
         if: steps.metadata.outputs.publish == 'true'

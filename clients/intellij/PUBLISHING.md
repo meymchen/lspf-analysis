@@ -94,6 +94,8 @@ that single entry.
 2. On Marketplace, choose **Upload plugin**, select the **Yuming Chen** vendor
    profile, and upload that one ZIP. Fill in the listing details and use the
    default release channel. This creates the plugin entry and its numeric ID.
+   In **General Information**, keep product compatibility calculated
+   automatically from the plugin descriptor, as described below.
 3. Wait until the manually uploaded version is approved and downloadable. Our
    publisher downloads it to compare its complete payload with the saved
    release bundle. While it is unavailable, a rerun can stop with a duplicate
@@ -111,12 +113,39 @@ on that same plugin page for each signed ZIP, in the default channel. See
 [Plugin updates][plugin-updates]. Retain the platform suffixes and use the
 exact GitHub release files so a later workflow run can verify them.
 
+## Automatic product compatibility
+
+Use automatic compatibility calculation in the Marketplace plugin's
+**General Information** settings. If a manual product list was previously
+configured, switch it back to automatic calculation and save the settings.
+This setting belongs to the Marketplace listing; uploading a new ZIP does not
+configure it through our release scripts. See the [listing guide][listing].
+
+Marketplace [detects compatible IDE products][compatibility] from the module
+and plugin dependencies in the uploaded `META-INF/plugin.xml`. This plugin
+requires `com.intellij.modules.platform` and `com.intellij.modules.lsp`.
+Each native variant also requires its OS and architecture modules, added by
+Gradle. Keep these dependencies required so IDEs only offer packages they can
+load and run.
+
+The `ides` list in `release.json` selects CI's Plugin Verifier targets. Each
+product has one `version`: its minimum supported release. `sinceBuild` sets
+the minimum platform build in each ZIP. Gradle explicitly clears `untilBuild`
+so the descriptor has no upper version limit, including Gradle's default.
+
+For subsequent IDE releases, rely on [Marketplace's automatic compatibility
+checks][build-ranges]. JetBrains can restrict incompatible plugin versions
+when necessary. An open upper bound permits future IDE builds; it does not
+mean those builds have already passed verification. Review Marketplace's
+Plugin Verifier reports and fix reported incompatibilities.
+
 ## What must pass
 
 - Release-script tests, Rust formatting, Clippy, and workspace tests.
 - Kotlin formatting and the existing IntelliJ model and integration tests.
-- Inspection of all six ZIPs: descriptor ID and version, IDE range, platform
-  dependencies, native binary architecture, and executable permissions.
+- Inspection of all six ZIPs: descriptor ID and version, minimum IDE build,
+  absence of an upper IDE bound, platform dependencies, native binary
+  architecture, and executable permissions.
 - Native execution of each packaged server: LSP initialization, document health,
   hover, shutdown, and a clean exit. No target is exempted as a cross build.
 - Plugin Verifier on the IDE matrix selected for the run, described below.
@@ -139,19 +168,20 @@ its signature verified. Both destinations consume these same signed files.
 Release builds use the checked-in Rust and Gradle versions and `Cargo.lock`.
 The signing and publishing jobs do not restore caches from PR runs.
 
-Ordinary PRs check IDEA's minimum and newest configured versions, plus PyCharm's
-newest configured version: currently three combinations. Tag releases and manual
-rehearsals check every product/version in `release.json`, currently 21 combinations.
-PRs also use the full matrix when they change the release workflow, `release.json`,
-Gradle build scripts or properties, the Gradle wrapper, XML descriptors under
-`src/main/resources/META-INF/`, or release scripts. Versions for both matrices come
-from `release.json`. All runs keep the six native server checks and the IDEA and
-PyCharm installation tests.
+Ordinary PRs check the configured minimum versions of IDEA and PyCharm: two
+combinations. Tag releases and manual rehearsals check the minimum version of
+every product in `release.json`, currently 11 combinations. PRs also check all
+products when they change the release workflow, `release.json`, Gradle build
+scripts or properties, the Gradle wrapper, XML descriptors under
+`src/main/resources/META-INF/`, or release scripts. All runs keep the six native
+server checks and the IDEA and PyCharm installation tests.
 
-`release.json` pins the IDE test matrix and compatibility bounds. Update it by
-PR when adopting a new stable IDE series, and extend the upper bound only after
-verification. Product patch numbers differ: DataSpell `2026.1.3`, for example,
-uses platform `261.26222.84`, which meets the common `261.26222` baseline.
+`release.json` is the source of the minimum versions for compilation, sandbox
+IDEs, installation tests, and Plugin Verifier. Update its `sinceBuild` and
+product versions by PR when raising the minimum requirement. Newer IDE
+releases do not require adding CI targets or advancing an upper bound.
+Product patch numbers differ: DataSpell `2026.1.3`, for example, uses platform
+`261.26222.84`, which meets the common `261.26222` baseline.
 The initial matrix covers IDEA, PyCharm, WebStorm, PhpStorm, RubyMine, CLion,
 GoLand, Rider, RustRover, DataGrip, and DataSpell. Remote development and WSL
 server deployments require separate validation before being advertised.
@@ -238,3 +268,6 @@ distributed. The release inspector rejects it.
 [first-upload]: https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html
 [native-variants]: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-extension.html#native-variants
 [plugin-updates]: https://plugins.jetbrains.com/docs/marketplace/plugin-updates.html
+[listing]: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#product-compatibility
+[compatibility]: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html
+[build-ranges]: https://plugins.jetbrains.com/docs/intellij/build-number-ranges.html#open-end-compatibility
