@@ -6,6 +6,13 @@ target/
 # dependency of the tree as a whole rather than of any one client.
 /node_modules/
 
+# Python caches at the repository root. The checked-in tooling here is invoked
+# from the root, so its bytecode and Ruff's rule cache (kept beside ruff.toml)
+# land here too. Ruff writes its own .ruff_cache/.gitignore, but declare it here
+# so the cache stays ignored if that file is ever lost.
+__pycache__/
+.ruff_cache/
+
 # Generated artifacts and image generation prompts.
 /output/
 
