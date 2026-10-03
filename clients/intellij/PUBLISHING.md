@@ -246,7 +246,8 @@ establish that identity, publication stops for investigation.
 An incomplete GitHub draft without a surviving signed artifact cannot be
 recovered by rebuilding. Restore the original files from a maintainer's backup,
 or retire that version and create a new one. Do not move the tag, overwrite
-assets, or sign a fresh build under the same version.
+assets, or sign a fresh build under the same tag. A rejected version can use
+the separate rebuild procedure above.
 
 For a severe regression, hide the affected Marketplace update, mark the GitHub
 release notes with the problem and recovery instructions, and publish a higher

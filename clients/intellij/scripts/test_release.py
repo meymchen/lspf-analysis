@@ -223,9 +223,12 @@ class BundleTests(unittest.TestCase):
             release.manifest(self.directory)
 
     def test_rebuild_bundle_keeps_plugin_version_and_uses_new_tag(self):
-        with patch.dict(
-            os.environ,
-            {"GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
+        with (
+            patch.object(release, "version", return_value="0.1.0"),
+            patch.dict(
+                os.environ,
+                {"GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
+            ),
         ):
             self.complete_bundle()
             data = release.verify_bundle(self.directory)
@@ -336,6 +339,7 @@ class TagTests(unittest.TestCase):
         ):
             with (
                 self.subTest(ref_type=ref_type),
+                patch.object(release, "version", return_value="0.1.0"),
                 patch.dict(
                     os.environ,
                     {"GITHUB_REF_TYPE": ref_type, "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
