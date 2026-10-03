@@ -222,6 +222,32 @@ class BundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exactly one ZIP"):
             release.manifest(self.directory)
 
+    def test_rebuild_bundle_keeps_plugin_version_and_uses_new_tag(self):
+        with (
+            patch.object(release, "version", return_value="0.1.0"),
+            patch.dict(
+                os.environ,
+                {"GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
+            ),
+        ):
+            self.complete_bundle()
+            data = release.verify_bundle(self.directory)
+        self.assertEqual("0.1.0", data["version"])
+        self.assertEqual("intellij-v0.1.0-rebuild.1", data["tag"])
+        self.assertTrue(all(a["version"].startswith("0.1.0-") for a in data["archives"]))
+
+    def test_original_bundle_cannot_be_reused_for_rebuild(self):
+        with patch.dict(os.environ, {"GITHUB_REF_TYPE": "branch"}):
+            self.complete_bundle()
+        with (
+            patch.dict(
+                os.environ,
+                {"GITHUB_REF_TYPE": "tag", "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
+            ),
+            self.assertRaisesRegex(ValueError, "identity/compatibility"),
+        ):
+            release.verify_bundle(self.directory)
+
     def test_different_jvm_code_between_platforms_prevents_manifest(self):
         for item in self.items:
             archive(self.directory, item)
@@ -306,6 +332,39 @@ class BundleTests(unittest.TestCase):
 
 
 class TagTests(unittest.TestCase):
+    def test_release_tag_uses_tag_ref_but_not_branch_name(self):
+        for ref_type, expected in (
+            ("tag", "intellij-v0.1.0-rebuild.1"),
+            ("branch", "intellij-v0.1.0"),
+        ):
+            with (
+                self.subTest(ref_type=ref_type),
+                patch.object(release, "version", return_value="0.1.0"),
+                patch.dict(
+                    os.environ,
+                    {"GITHUB_REF_TYPE": ref_type, "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1"},
+                ),
+            ):
+                self.assertEqual(expected, release.release_tag())
+
+    def test_rebuild_tag_checks_exact_ref_and_main_ancestry(self):
+        with (
+            patch.object(release, "git", return_value="a" * 40) as git,
+            patch.object(release.subprocess, "run") as run,
+        ):
+            release.validate_tag("intellij-v0.1.0-rebuild.1", "0.1.0", "a" * 40)
+        git.assert_called_once_with("rev-parse", "refs/tags/intellij-v0.1.0-rebuild.1^{commit}")
+        self.assertEqual(
+            ["git", "merge-base", "--is-ancestor", "a" * 40, "origin/main"],
+            run.call_args.args[0],
+        )
+        self.assertTrue(run.call_args.kwargs["check"])
+
+    def test_invalid_rebuild_suffix_is_rejected(self):
+        for suffix in ("0", "01", "-1", "1-extra", "1;echo unsafe"):
+            with self.subTest(suffix=suffix), self.assertRaises(ValueError):
+                release.validate_tag(f"intellij-v0.1.0-rebuild.{suffix}", "0.1.0", "a" * 40)
+
     def test_wrong_prefix_or_version_is_rejected(self):
         for tag in ("vscode-v0.1.0", "intellij-v0.2.0", "intellij-v0.1.0;echo unsafe"):
             with self.subTest(tag=tag), self.assertRaises(ValueError):
@@ -457,10 +516,60 @@ class PublishingTests(unittest.TestCase):
         github.release.return_value = None
         with (
             patch.object(publish, "version", return_value="0.1.0"),
-            patch.dict(os.environ, {"GITHUB_RUN_ID": "42"}),
+            patch.dict(os.environ, {"GITHUB_RUN_ID": "42", "GITHUB_REF_TYPE": "branch"}),
             self.assertRaisesRegex(ValueError, "RC before"),
         ):
             publish.probe(github)
+
+    def test_rebuild_probe_does_not_reuse_original_release(self):
+        github = Mock()
+        github.api.return_value = {"artifacts": []}
+        original = {"id": 1, "draft": False, "prerelease": False}
+        github.release.side_effect = lambda tag: original if tag == "intellij-v0.1.0" else None
+        output = self.directory / "output"
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "GITHUB_RUN_ID": "42",
+                    "GITHUB_OUTPUT": str(output),
+                    "GITHUB_REF_TYPE": "tag",
+                    "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1",
+                },
+            ),
+            patch.object(publish, "canonical_bundle") as saved,
+        ):
+            publish.probe(github)
+        self.assertEqual(
+            ["intellij-v0.1.0-rebuild.1", "intellij-v0.1.0"],
+            [call.args[0] for call in github.release.call_args_list],
+        )
+        github.api.assert_called_once_with("/actions/runs/42/artifacts?per_page=100")
+        saved.assert_not_called()
+        self.assertEqual("reuse=none\n", output.read_text())
+
+    def test_rebuild_requires_the_original_published_release(self):
+        for original in (
+            None,
+            {"draft": True, "prerelease": False},
+            {"draft": False, "prerelease": True},
+        ):
+            github = Mock()
+            github.api.return_value = {"artifacts": []}
+            github.release.side_effect = [None, original]
+            with (
+                self.subTest(original=original),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_RUN_ID": "42",
+                        "GITHUB_REF_TYPE": "tag",
+                        "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1",
+                    },
+                ),
+                self.assertRaisesRegex(ValueError, "original published release"),
+            ):
+                publish.probe(github)
 
     def test_marketplace_receipts_resume_only_missing_uploads(self):
         github = Mock()

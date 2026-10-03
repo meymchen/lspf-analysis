@@ -149,6 +149,8 @@ intellijPlatform {
             VerifyPluginTask.FailureLevel.COMPATIBILITY_PROBLEMS,
             VerifyPluginTask.FailureLevel.INVALID_PLUGIN,
             VerifyPluginTask.FailureLevel.MISSING_DEPENDENCIES,
+            // Marketplace rejects private platform APIs even when the plugin is binary-compatible.
+            VerifyPluginTask.FailureLevel.INTERNAL_API_USAGES,
         )
         ides {
             val selected = providers.gradleProperty("verificationIde").orNull
