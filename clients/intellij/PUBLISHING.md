@@ -215,7 +215,9 @@ stay the same, merge the fix and push a new tag such as
 `intellij-v0.1.0-rebuild.1`. Increment the rebuild number for each new source
 commit. The plugin version remains `0.1.0`, including the existing native
 variant suffixes. The rebuild runs all release checks and signing, then saves
-its own GitHub release, manifest, and Marketplace receipts.
+its own GitHub release, manifest, and Marketplace receipts. It requires the
+original published Release; the initial RC is only required for the first
+0.1.0 publication.
 
 The original tag and release assets remain unchanged. Rerunning the original
 tag run reuses its original files and cannot publish the fix. Rerun the rebuild

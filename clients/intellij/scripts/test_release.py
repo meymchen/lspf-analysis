@@ -516,18 +516,16 @@ class PublishingTests(unittest.TestCase):
         github.release.return_value = None
         with (
             patch.object(publish, "version", return_value="0.1.0"),
-            patch.dict(os.environ, {"GITHUB_RUN_ID": "42"}),
+            patch.dict(os.environ, {"GITHUB_RUN_ID": "42", "GITHUB_REF_TYPE": "branch"}),
             self.assertRaisesRegex(ValueError, "RC before"),
         ):
             publish.probe(github)
 
     def test_rebuild_probe_does_not_reuse_original_release(self):
         github = Mock()
-        github.api.side_effect = [
-            {"artifacts": []},
-            [{"draft": False, "prerelease": True, "tag_name": "intellij-v0.1.0-rc.1"}],
-        ]
-        github.release.side_effect = lambda tag: {"id": 1} if tag == "intellij-v0.1.0" else None
+        github.api.return_value = {"artifacts": []}
+        original = {"id": 1, "draft": False, "prerelease": False}
+        github.release.side_effect = lambda tag: original if tag == "intellij-v0.1.0" else None
         output = self.directory / "output"
         with (
             patch.dict(
@@ -542,9 +540,36 @@ class PublishingTests(unittest.TestCase):
             patch.object(publish, "canonical_bundle") as saved,
         ):
             publish.probe(github)
-        github.release.assert_called_once_with("intellij-v0.1.0-rebuild.1")
+        self.assertEqual(
+            ["intellij-v0.1.0-rebuild.1", "intellij-v0.1.0"],
+            [call.args[0] for call in github.release.call_args_list],
+        )
+        github.api.assert_called_once_with("/actions/runs/42/artifacts?per_page=100")
         saved.assert_not_called()
         self.assertEqual("reuse=none\n", output.read_text())
+
+    def test_rebuild_requires_the_original_published_release(self):
+        for original in (
+            None,
+            {"draft": True, "prerelease": False},
+            {"draft": False, "prerelease": True},
+        ):
+            github = Mock()
+            github.api.return_value = {"artifacts": []}
+            github.release.side_effect = [None, original]
+            with (
+                self.subTest(original=original),
+                patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_RUN_ID": "42",
+                        "GITHUB_REF_TYPE": "tag",
+                        "GITHUB_REF_NAME": "intellij-v0.1.0-rebuild.1",
+                    },
+                ),
+                self.assertRaisesRegex(ValueError, "original published release"),
+            ):
+                publish.probe(github)
 
     def test_marketplace_receipts_resume_only_missing_uploads(self):
         github = Mock()

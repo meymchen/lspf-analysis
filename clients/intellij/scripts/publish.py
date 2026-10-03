@@ -178,7 +178,16 @@ def probe(github):
         with tempfile.TemporaryDirectory() as temp:
             canonical_bundle(github, Path(temp))
         reuse = "github"
-    if reuse == "none" and version() == "0.1.0":
+    original_tag = f"intellij-v{version()}"
+    if reuse == "none" and release_tag() != original_tag:
+        original = github.release(original_tag)
+        if (
+            not original
+            or original.get("draft", True)
+            or original.get("prerelease") != ("-rc." in version())
+        ):
+            raise ValueError("A rebuild requires the original published release")
+    elif reuse == "none" and version() == "0.1.0":
         # The first public version must follow a published RC rehearsal.
         page = 1
         while True:
