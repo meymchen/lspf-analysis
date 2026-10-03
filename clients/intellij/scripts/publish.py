@@ -15,6 +15,7 @@ from release import (
     PLUGIN_ID,
     git,
     inspect_archive,
+    release_tag,
     sha256,
     target_config,
     validate_tag,
@@ -124,7 +125,7 @@ class GitHub:
 
 
 def canonical_bundle(github, directory):
-    tag = f"intellij-v{version()}"
+    tag = release_tag()
     release = github.release(tag)
     if not release:
         raise ValueError("No saved GitHub release exists")
@@ -173,7 +174,7 @@ def probe(github):
     ]
     if signed:
         reuse = "artifact"
-    elif github.release(f"intellij-v{version()}"):
+    elif github.release(release_tag()):
         with tempfile.TemporaryDirectory() as temp:
             canonical_bundle(github, Path(temp))
         reuse = "github"
@@ -355,7 +356,7 @@ def main():
     )
     args = parser.parse_args()
     # Every privileged invocation checks the immutable tag and ancestry again.
-    validate_tag(f"intellij-v{version()}", version(), git("rev-parse", "HEAD"))
+    validate_tag(release_tag(), version(), git("rev-parse", "HEAD"))
     github = GitHub()
     if args.command == "probe":
         probe(github)

@@ -2,6 +2,7 @@
 
 ## 0.1.0
 
+- Use the public theme API and reject Internal API usage during release verification.
 - Release native language server bundles for Windows, macOS, and Linux on x64
   and ARM64.
 - Show function and class health in gutter hovers, the status bar, and the

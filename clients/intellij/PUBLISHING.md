@@ -208,6 +208,24 @@ GitHub availability and Marketplace approval are separate states:
 The workflow summary links the release and the publisher dashboard. It does
 not wait on the review queue or automatically claim that an update is live.
 
+## Rebuild a rejected version
+
+If Marketplace rejects an upload before approval and the plugin version must
+stay the same, merge the fix and push a new tag such as
+`intellij-v0.1.0-rebuild.1`. Increment the rebuild number for each new source
+commit. The plugin version remains `0.1.0`, including the existing native
+variant suffixes. The rebuild runs all release checks and signing, then saves
+its own GitHub release, manifest, and Marketplace receipts.
+
+The original tag and release assets remain unchanged. Rerunning the original
+tag run reuses its original files and cannot publish the fix. Rerun the rebuild
+run to recover an interrupted rebuild publication.
+
+Marketplace cannot accept different contents for the same version. Once the
+new signed bundle is ready, remove the rejected update from the plugin's
+Versions page before submitting the replacement. Keep approved versions and
+publish a new plugin version instead of replacing them.
+
 ## Recover an interrupted publication
 
 Use **Re-run failed jobs** on the original tag run. **Re-run all jobs** also

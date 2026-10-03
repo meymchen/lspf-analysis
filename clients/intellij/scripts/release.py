@@ -69,8 +69,17 @@ def notes(release_version):
     return match[1].strip()
 
 
+def release_tag():
+    """A rebuild has its own immutable tag while keeping the plugin version."""
+    if os.environ.get("GITHUB_REF_TYPE") == "tag":
+        return os.environ["GITHUB_REF_NAME"]
+    return f"intellij-v{version()}"
+
+
 def validate_tag(tag, release_version, commit):
-    if tag != f"intellij-v{release_version}":
+    if not re.fullmatch(
+        rf"intellij-v{re.escape(release_version)}(?:-rebuild\.[1-9]\d*)?", tag
+    ):
         raise ValueError("Tag does not match gradle.properties")
     if git("rev-parse", f"refs/tags/{tag}^{{commit}}") != commit:
         raise ValueError("Tag no longer points to the release commit")
@@ -332,7 +341,7 @@ def manifest(directory):
         "schema": 1,
         "pluginId": PLUGIN_ID,
         "version": version(),
-        "tag": f"intellij-v{version()}",
+        "tag": release_tag(),
         "commit": git("rev-parse", "HEAD"),
         "serverVersion": server_version,
         "compatibility": config(),
@@ -362,7 +371,7 @@ def verify_bundle(directory):
         raise ValueError("Release bundle does not belong to this source commit/version")
     if (
         data["pluginId"] != PLUGIN_ID
-        or data["tag"] != f"intellij-v{version()}"
+        or data["tag"] != release_tag()
         or data["compatibility"] != config()
     ):
         raise ValueError("Release manifest identity/compatibility mismatch")

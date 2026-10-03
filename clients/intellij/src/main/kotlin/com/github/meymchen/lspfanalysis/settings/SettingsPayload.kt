@@ -3,7 +3,7 @@ package com.github.meymchen.lspfanalysis.settings
 import com.google.gson.JsonObject
 import com.intellij.DynamicBundle
 import com.intellij.openapi.project.Project
-import com.intellij.util.ui.StartupUiUtil
+import com.intellij.ui.JBColor
 import com.intellij.util.ui.UIUtil
 import java.awt.Color
 import java.util.Locale
@@ -82,7 +82,7 @@ fun settingsPayload(project: Project): JsonObject {
  * on one gets the dark palette rather than the uncoloured letters they should.
  */
 private fun displayTheme(): JsonObject = JsonObject().apply {
-    addProperty("kind", if (StartupUiUtil.isDarkTheme) "dark" else "light")
+    addProperty("kind", if (JBColor.isBright()) "light" else "dark")
     addProperty("background", hex(UIUtil.getToolTipBackground()))
 }
 
