@@ -280,12 +280,12 @@
   "dependencies": {
     "vscode-languageclient": "^10.1.2",
     "vscode-ws-jsonrpc": "^4.0.2",
-    "ws": "^8.21.3"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@types/node": "^24.19.0",
+    "@types/node": "^24.19.1",
     "@types/vscode": "~1.106.0",
-    "@types/ws": "^8.18.1",
+    "@types/ws": "^8.18.2",
     "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "ovsx": "^1.2.0",
