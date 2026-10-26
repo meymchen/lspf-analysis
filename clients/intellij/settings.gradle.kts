@@ -4,7 +4,7 @@ rootProject.name = "lspf-analysis"
 
 pluginManagement {
     plugins {
-        id("org.jetbrains.kotlin.jvm") version "2.4.20"
+        id("org.jetbrains.kotlin.jvm") version "2.4.21"
         id("org.jlleitschuh.gradle.ktlint") version "14.2.0"
     }
 }
