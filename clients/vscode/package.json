@@ -278,7 +278,7 @@
     "vscode:prepublish": "npm run bundle"
   },
   "dependencies": {
-    "vscode-languageclient": "^10.1.2",
+    "vscode-languageclient": "^11.0.0",
     "vscode-ws-jsonrpc": "^4.0.3",
     "ws": "^8.22.0"
   },
