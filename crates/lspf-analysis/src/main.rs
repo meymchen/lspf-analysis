@@ -249,8 +249,9 @@ async fn run_serve(choice: Choice) -> lspf::Result<lspf::Outcome> {
     }
 }
 
-#[tokio::main]
-async fn main() {
+/// Starts the async runtime only for `serve`; `metrics` is synchronous. Setup
+/// stays outside the runtime too, so its blocking file I/O stalls no worker.
+fn main() {
     #[cfg(target_env = "musl")]
     use_mimalloc_for_tree_sitter();
 
@@ -277,14 +278,20 @@ async fn main() {
         .init();
 
     match Opts::parse().command {
-        Command::Serve(serve) => match run_serve(serve.transport.choice()).await {
-            Ok(outcome) => process::exit(outcome.code()),
-            Err(error) => {
-                tracing::error!(%error, "language server failed");
-                eprintln!("lspf-analysis: {error}");
+        Command::Serve(serve) => {
+            let runtime = tokio::runtime::Runtime::new().unwrap_or_else(|error| {
+                eprintln!("lspf-analysis: cannot start the async runtime: {error}");
                 process::exit(1);
+            });
+            match runtime.block_on(run_serve(serve.transport.choice())) {
+                Ok(outcome) => process::exit(outcome.code()),
+                Err(error) => {
+                    tracing::error!(%error, "language server failed");
+                    eprintln!("lspf-analysis: {error}");
+                    process::exit(1);
+                }
             }
-        },
+        }
         Command::Metrics(metrics) => {
             if let Err(error) = run_metrics(metrics) {
                 eprintln!("lspf-analysis: {error}");
