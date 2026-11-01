@@ -39,12 +39,12 @@ fn use_mimalloc_for_tree_sitter() {
     // SAFETY: main calls this first, before anything tree-sitter owns has
     // been allocated, and nothing else sets the allocator.
     unsafe {
-        tree_sitter::set_allocator(
-            Some(mi_malloc),
-            Some(mi_calloc),
-            Some(mi_realloc),
-            Some(mi_free),
-        );
+        tree_sitter::set_allocator(Some(tree_sitter::Allocator {
+            malloc: mi_malloc,
+            calloc: mi_calloc,
+            realloc: mi_realloc,
+            free: mi_free,
+        }));
     }
 }
 

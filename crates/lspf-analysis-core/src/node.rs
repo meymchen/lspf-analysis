@@ -98,7 +98,8 @@ impl<'a> Node<'a> {
     }
 
     pub(crate) fn child_count(&self) -> usize {
-        self.0.child_count()
+        // tree-sitter counts children in a `u32`; widening never loses them.
+        self.0.child_count() as usize
     }
 
     pub(crate) fn is_named(&self) -> bool {
