@@ -303,7 +303,8 @@ pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Func
     // Initialize nesting_map used for storing nesting information for cognitive
     // Three type of nesting info: conditionals, functions and lambdas
     let mut nesting_map = HashMap::<usize, (usize, usize, usize)>::default();
-    nesting_map.insert(node.id(), (0, 0, 0));
+    let root_id = node.id();
+    nesting_map.insert(root_id, (0, 0, 0));
     stack.push((node, 0));
 
     while let Some((node, level)) = stack.pop() {
@@ -312,9 +313,18 @@ pub fn metrics<'a, T: ParserTrait>(parser: &'a T, path: &'a Path) -> Option<Func
             last_level = level;
         }
 
-        let kind = T::Getter::get_space_kind(&node);
+        let mut kind = T::Getter::get_space_kind(&node);
+        let mut func_space = T::Checker::is_func(&node) || T::Checker::is_func_space(&node);
 
-        let func_space = T::Checker::is_func(&node) || T::Checker::is_func_space(&node);
+        // The root must always open a space, otherwise the first space found
+        // below it would become the root and absorb all the following ones.
+        // This happens when error recovery makes the root an ERROR node,
+        // which is routine for a file the user is still typing.
+        if node.id() == root_id && !func_space {
+            kind = SpaceKind::Unit;
+            func_space = true;
+        }
+
         let unit = kind == SpaceKind::Unit;
 
         let new_level = if func_space {
@@ -400,5 +410,35 @@ impl Callback for Metrics {
             Some(space) => dump_root(&space),
             _ => Ok(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use crate::JavascriptParser;
+
+    // Error recovery can make the root of the tree an ERROR node, which is not
+    // a space for any language: the root must still be the unit containing
+    // all the other spaces.
+    #[test]
+    fn error_root_is_unit() {
+        let code = "const F = {\n    a: x => 1\n};\nclass A {\n    g() {\n";
+        let path = Path::new("foo.js");
+        let parser = JavascriptParser::new(code.as_bytes().to_vec(), path);
+        assert_eq!(parser.get_root().kind_id(), u16::MAX);
+
+        let space = metrics(&parser, path).unwrap();
+        assert_eq!(space.kind, SpaceKind::Unit);
+        assert_eq!((space.start_line, space.end_line), (1, 5));
+        assert_eq!(space.metrics.loc.sloc(), 5.);
+        assert_eq!(space.spaces.len(), 1);
+        assert_eq!(space.spaces[0].name.as_deref(), Some("a"));
+        assert_eq!(
+            (space.spaces[0].start_line, space.spaces[0].end_line),
+            (2, 2)
+        );
     }
 }
