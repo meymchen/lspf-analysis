@@ -642,9 +642,19 @@ impl Loc for JavascriptCode {
             | Javascript::DebuggerStatement
             | Javascript::ReturnStatement
             | Javascript::ThrowStatement
-            | Javascript::EmptyStatement
             | Javascript::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
+            }
+            Javascript::EmptyStatement => {
+                // An empty initializer or condition in a `for` header is an
+                // `empty_statement`, while a non-empty one is a bare expression:
+                // count neither, the `for` statement is already counted.
+                if !node
+                    .parent()
+                    .is_some_and(|parent| parent.kind_id() == Javascript::ForStatement as u16)
+                {
+                    stats.lloc.logical_lines += 1;
+                }
             }
             _ => {
                 check_comment_ends_on_code_line(stats, start);
@@ -680,9 +690,19 @@ impl Loc for TypescriptCode {
             | Typescript::DebuggerStatement
             | Typescript::ReturnStatement
             | Typescript::ThrowStatement
-            | Typescript::EmptyStatement
             | Typescript::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
+            }
+            Typescript::EmptyStatement => {
+                // An empty initializer or condition in a `for` header is an
+                // `empty_statement`, while a non-empty one is a bare expression:
+                // count neither, the `for` statement is already counted.
+                if !node
+                    .parent()
+                    .is_some_and(|parent| parent.kind_id() == Typescript::ForStatement as u16)
+                {
+                    stats.lloc.logical_lines += 1;
+                }
             }
             _ => {
                 check_comment_ends_on_code_line(stats, start);
@@ -718,9 +738,19 @@ impl Loc for TsxCode {
             | Tsx::DebuggerStatement
             | Tsx::ReturnStatement
             | Tsx::ThrowStatement
-            | Tsx::EmptyStatement
             | Tsx::StatementIdentifier => {
                 stats.lloc.logical_lines += 1;
+            }
+            Tsx::EmptyStatement => {
+                // An empty initializer or condition in a `for` header is an
+                // `empty_statement`, while a non-empty one is a bare expression:
+                // count neither, the `for` statement is already counted.
+                if !node
+                    .parent()
+                    .is_some_and(|parent| parent.kind_id() == Tsx::ForStatement as u16)
+                {
+                    stats.lloc.logical_lines += 1;
+                }
             }
             _ => {
                 check_comment_ends_on_code_line(stats, start);
@@ -2050,12 +2080,12 @@ mod tests {
                     {
                       "sloc": 5.0,
                       "ploc": 5.0,
-                      "lloc": 6.0,
+                      "lloc": 5.0,
                       "cloc": 0.0,
                       "blank": 0.0,
                       "sloc_average": 2.5,
                       "ploc_average": 2.5,
-                      "lloc_average": 3.0,
+                      "lloc_average": 2.5,
                       "cloc_average": 0.0,
                       "blank_average": 0.0,
                       "sloc_min": 5.0,
@@ -2064,14 +2094,34 @@ mod tests {
                       "cloc_max": 0.0,
                       "ploc_min": 5.0,
                       "ploc_max": 5.0,
-                      "lloc_min": 5.0,
-                      "lloc_max": 5.0,
+                      "lloc_min": 4.0,
+                      "lloc_max": 4.0,
                       "blank_min": 0.0,
                       "blank_max": 0.0
                     }"###
                 );
             },
         );
+    }
+
+    #[test]
+    fn javascript_for_header_loc() {
+        // The initializer and the condition of a `for` header are not logical
+        // lines on their own, whether they are empty or not.
+        let code = "for (i = 0; i < 4; ++i) {} // +2 (for, block)
+             for (; i < 4; ++i) {} // +2
+             for (i = 0; ; ++i) {} // +2
+             for (;;) {} // +2";
+
+        fn check<T: ParserTrait>(code: &str, path: &str) {
+            check_metrics::<T>(code, path, |metric| {
+                assert_eq!(metric.loc.lloc(), 8.0);
+            });
+        }
+
+        check::<JavascriptParser>(code, "foo.js");
+        check::<TypescriptParser>(code, "foo.ts");
+        check::<TsxParser>(code, "foo.tsx");
     }
 
     #[test]
