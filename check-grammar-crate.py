@@ -13,7 +13,7 @@ against a large real-world repository.
 
 To compute metrics:
 
-./check-grammar-crate.py compute-metrics -u REPO_URL -p LOCAL_DIR -l TREE_SITTER_GRAMMAR
+./check-grammar-crate.py compute-metrics -u REPO_URL -p LOCAL_DIR -g TREE_SITTER_GRAMMAR
 
 NOTE: The compute-metrics subcommand MUST be run on a clean main branch!
 
@@ -21,7 +21,10 @@ To compare metrics and retrieve metrics differences and minimal tests:
 
 1. Install json-minimal-tests from here: https://github.com/Luni-4/json-minimal-tests/releases
 
-./check-grammar-crate.py compare-metrics -l TREE_SITTER_GRAMMAR
+./check-grammar-crate.py compare-metrics -g TREE_SITTER_GRAMMAR
+
+The clone and the metrics go in target/check-grammar-crate unless --workdir
+says otherwise; both subcommands must be given the same one.
 
 NOTE: Add the paths of the software above to the PATH environment variable!
 """
@@ -31,8 +34,13 @@ import pathlib
 import subprocess
 import sys
 
-# The /tmp directory will be used as workdir
-WORKDIR = pathlib.Path("/tmp")
+# The clone and the metrics go here by default. It must survive between the
+# two subcommands, so it can't be a fresh temporary directory, and it must not
+# be a shared one like /tmp, where another user could plant a symlink at one of
+# the fixed names below. target/ is already ignored by git.
+DEFAULT_WORKDIR = (
+    pathlib.Path(__file__).resolve().parent / "target" / "check-grammar-crate"
+)
 # Suffix for the directory containing the old metrics
 OLD_SUFFIX = "-old"
 # Suffix for the directory containing the new metrics
@@ -48,6 +56,7 @@ EXTENSIONS = {
     "tree-sitter-python": ["*.py"],
     "tree-sitter-javascript": ["*.js", "*.mjs", "*.cjs", "*.jsx"],
 }
+
 
 # Run a subprocess.
 def run_subprocess(cmd: str, *args: str | pathlib.Path) -> None:
@@ -87,11 +96,11 @@ def compute_metrics(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     # Repository local directory
-    repo_dir = WORKDIR / args.path
+    repo_dir = args.workdir / args.path
     # Old metrics directory
-    old_dir = WORKDIR / (args.grammar + OLD_SUFFIX)
+    old_dir = args.workdir / (args.grammar + OLD_SUFFIX)
     # New metrics directory
-    new_dir = WORKDIR / (args.grammar + NEW_SUFFIX)
+    new_dir = args.workdir / (args.grammar + NEW_SUFFIX)
 
     # Create output directories
     old_dir.mkdir(parents=True, exist_ok=True)
@@ -99,7 +108,6 @@ def compute_metrics(args: argparse.Namespace) -> None:
 
     # Skip if only new metrics are requested
     if not args.only_new:
-
         # Git clone the chosen repository
         print(f"Cloning {args.url} into {repo_dir}")
         run_subprocess("git", "clone", "--depth=1", args.url, repo_dir)
@@ -120,12 +128,12 @@ def compute_metrics(args: argparse.Namespace) -> None:
 # Compare metrics and dump the differences whether there are some.
 def compare_metrics(args: argparse.Namespace) -> None:
     # Old metrics directory
-    old_dir = WORKDIR / (args.grammar + OLD_SUFFIX)
+    old_dir = args.workdir / (args.grammar + OLD_SUFFIX)
     # New metrics directory
-    new_dir = WORKDIR / (args.grammar + NEW_SUFFIX)
+    new_dir = args.workdir / (args.grammar + NEW_SUFFIX)
 
     # Compare metrics directory
-    compare_dir = WORKDIR / (args.grammar + "-compare")
+    compare_dir = args.workdir / (args.grammar + "-compare")
 
     # Create compare directory
     compare_dir.mkdir(parents=True, exist_ok=True)
@@ -144,12 +152,23 @@ def main() -> None:
         "GitHub at https://github.com/meymchen/lspf-analysis",
     )
 
+    # Options shared by both subcommands
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument(
+        "--workdir",
+        "-w",
+        type=pathlib.Path,
+        default=DEFAULT_WORKDIR,
+        help="Directory holding the clone and the metrics (default: %(default)s)",
+    )
+
     # Subcommands parsers
     commands = parser.add_subparsers(help="Sub-command help")
 
     # Compute metrics command
     compute_metrics_cmd = commands.add_parser(
         "compute-metrics",
+        parents=[common],
         help="Computes the metrics of a chosen repository before and after "
         "a tree-sitter grammar update.",
     )
@@ -191,6 +210,7 @@ def main() -> None:
     # Compare metrics command
     compare_metrics_cmd = commands.add_parser(
         "compare-metrics",
+        parents=[common],
         help="Compares the metrics before and after "
         "a tree-sitter grammar update in order to discover whether "
         "there are differences.",
