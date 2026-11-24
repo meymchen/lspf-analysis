@@ -309,7 +309,7 @@ fn inventory(node: Node<'_>, code: &[u8]) -> Class {
         }
         let mut cursor = member.0.walk();
         for raw in member.0.children_by_field_name("declarator", &mut cursor) {
-            let declarator = Node(raw);
+            let declarator = member.wrap(raw);
             if let Some(function) = method_declarator(declarator) {
                 let name = method_name(declarator, code);
                 let key = signature(function, &name, code);

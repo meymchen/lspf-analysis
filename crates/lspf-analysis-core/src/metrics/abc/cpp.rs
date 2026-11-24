@@ -105,7 +105,8 @@ pub(super) fn compute(node: Node<'_>, stats: &mut Stats) {
                 loop {
                     match cursor.field_name() {
                         Some("declarator") => {
-                            method = crate::cpp::method_declarator(Node(cursor.node())).is_some()
+                            method =
+                                crate::cpp::method_declarator(node.wrap(cursor.node())).is_some()
                         }
                         Some("default_value") if !method => stats.assignments += 1.,
                         _ => {}
