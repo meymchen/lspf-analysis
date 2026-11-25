@@ -73,29 +73,43 @@ Before submitting the exact extension commit, manually verify in Zed:
 State which platforms have only native CI verification and which were tested
 interactively. SSH and Dev Container validation are deferred for this release.
 
-### Initial local verification
+### Verification record for 0.1.0
 
-The initial implementation was checked as an uncommitted working tree on
-Windows x64, with Zed 1.22.0 and Rust 1.98.0:
+The extension and server were verified at commit `055b0be` on Windows x64,
+with Zed 1.29.3 and Rust 1.98.0. The commit submitted to the registry differs
+from it only in documentation under `clients/zed`.
 
-- The server workspace tests, Clippy, and formatting passed.
-- The extension's cache/configuration tests, Clippy, WASI component build,
-  and manifest checks passed. Its dependency audit passed.
-- Both debug and staged release servers passed the eight-file-type LSP smoke
-  test, including live configuration and Chinese hover text.
-- In an isolated Zed profile, the real extension loaded, launched the staged
-  server from its versioned cache, initialized, opened a Rust file, and published
-  diagnostics. Editing project settings triggered another configuration
-  notification and diagnostic publication without restarting the server.
-- Release-script tests, actionlint, zizmor, Python checks, and formatting of
-  the changed source files passed.
+Automated checks on that commit:
 
-The other five native targets have a CI matrix but were not built locally.
-An actual first download awaits publication of the pinned server assets.
-Hover rendering, completion coexistence, and the remaining manual checks above
-still need interactive verification on the exact commit submitted to Zed.
-Repository-wide Prettier also finds existing Visual Studio `obj` artifacts;
-those generated files are outside this change and were left untouched.
+- Extension formatting, Clippy, cache/configuration tests, WASI component
+  build, and `check_extension.py` passed.
+- The release server passed `lsp_smoke.py` for all eight file types,
+  including live configuration, Chinese output, and shutdown.
+- A manual `release-server.yml` run built all six targets and ran each
+  target's smoke test on its native runner
+  ([run 45605980589](https://github.com/meymchen/lspf-analysis/actions/runs/45605980589)).
+- The `server-v0.1.0` tag run rebuilt and published the release
+  ([run 45608370400](https://github.com/meymchen/lspf-analysis/actions/runs/45608370400)).
+  All six asset URLs derived from `server-version` returned HTTP 200, and the
+  Windows x64 asset matched `SHA256SUMS`.
+
+Interactive checks in Zed, Windows x64 only:
+
+- Installed through **Install Dev Extension** from `clients/zed`.
+- rust-analyzer completion and navigation kept working alongside LSPF Analysis.
+- Function hovers in Rust, Python, TSX, and C++, and a Java class hover,
+  showed score tables with readable grades.
+- Raising `qualityWarn` produced a diagnostic; disabling diagnostics removed
+  it without restarting the server.
+- `locale: "zh-cn"` switched diagnostics and hovers to Chinese.
+- A `binary.path` containing a space, with `["serve", "--stdio"]`, launched
+  the server.
+- With an empty extension work directory, the extension downloaded
+  `server-v0.1.0`; the cached file matched the release checksum. A restart
+  with the network disabled reused the cache.
+
+Windows ARM64, macOS x64 and ARM64, and Linux x64 and ARM64 have native CI
+verification only. SSH and Dev Containers were not tested.
 
 ## Submit to the extension directory
 

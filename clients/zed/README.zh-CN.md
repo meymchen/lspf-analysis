@@ -11,7 +11,7 @@
 
 ## 本地安装
 
-扩展已准备上架材料。在固定版本的服务器发布之前，先从仓库根目录构建服务器：
+开发安装会自动下载固定版本的服务器。如需改用本地构建的服务器，先从仓库根目录构建：
 
 ```console
 cargo build --release --package lspf-analysis --locked
