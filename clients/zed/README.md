@@ -14,9 +14,10 @@ validated for this first release.
 
 ## Install locally
 
-The extension is prepared for submission to the Zed extension directory.
-Until the pinned server release is published, build a local server and configure
-its path before opening a supported source file:
+A dev install downloads the pinned server automatically, as described under
+[Downloads and offline use](#downloads-and-offline-use). To run a local server
+build instead, build it and configure its path before opening a supported
+source file:
 
 ```console
 cargo build --release --package lspf-analysis --locked
